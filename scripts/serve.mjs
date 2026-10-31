@@ -1,9 +1,9 @@
-// Tiny static server for local testing: serves dist/ on PORT (default 5173).
+// Tiny static server for local testing: serves dist/ (or ROOT) on PORT (default 5173).
 import { createServer } from 'node:http';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
 
-const root = new URL('../dist/', import.meta.url).pathname;
+const root = process.env.ROOT || new URL('../dist/', import.meta.url).pathname;
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.json': 'application/json' };
 const port = Number(process.env.PORT || 5173);
 createServer((req, res) => {

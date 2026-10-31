@@ -1,6 +1,9 @@
 // Works with the network off after the first visit; passes Chrome's install (PWA) checks.
 import { test } from '@playwright/test';
-import { tones } from './fixtures.mjs';
+import { spawn } from 'node:child_process';
+import { appendFileSync, cpSync, mkdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { FIX, tones } from './fixtures.mjs';
 import { expect, importDir, openApp, waitForServiceWorker } from './helpers.mjs';
 
 test('works fully offline after the first visit', async ({ page, context }) => {
@@ -49,4 +52,28 @@ test('an app update (new service worker and cache) keeps the library', async ({ 
   await page.waitForSelector('html[data-ready="1"]', { state: 'attached' });
   await waitForServiceWorker(page);
   expect(await page.evaluate(() => [window.__lark.store.lib.songs.size, [...window.__lark.store.lib.playlists.values()][0]?.name])).toEqual([6, 'Keep me']);
+});
+
+test('a new version switches over by itself when nothing is playing', async ({ page }) => {
+  // Serve a private copy of the app so this test can "publish" a new version.
+  const dir = join(FIX, 'out', 'dist-update');
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+  cpSync('dist', dir, { recursive: true });
+  const server = spawn('node', ['scripts/serve.mjs'], { env: { ...process.env, PORT: '5181', ROOT: `${dir}/` }, stdio: 'ignore' });
+  try {
+    await expect.poll(() => fetch('http://localhost:5181/').then((r) => r.ok, () => false)).toBe(true);
+    await openApp(page, 'http://localhost:5181/');
+    await waitForServiceWorker(page);
+    await importDir(page, tones(6, 4));
+    appendFileSync(join(dir, 'sw.js'), '\n// next version\n');
+    const reloaded = page.waitForEvent('load');
+    await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
+    await reloaded;
+    await page.waitForSelector('html[data-ready="1"]', { state: 'attached' });
+    expect(await page.evaluate(() => window.__lark.store.lib.songs.size)).toBe(6);
+  } finally {
+    server.kill();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

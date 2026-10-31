@@ -1,5 +1,5 @@
 // App shell: layout, router, global click/keyboard handling, drag & drop import, import progress.
-import { fromDataTransfer, fromFileList, importFiles, progress } from '../importer.js';
+import { fromDataTransfer, fromFileList, importFiles, progress, state as importState } from '../importer.js';
 import * as P from '../player.js';
 import * as store from '../store.js';
 import { $, $$, esc, isMobile } from '../util.js';
@@ -206,7 +206,11 @@ export function registerSW() {
   let updating = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => { if (updating) location.reload(); });
   navigator.serviceWorker.register('sw.js').then((reg) => {
-    const offer = (w) => toast('A new version of Lark is ready', { label: 'Restart', run: () => { updating = true; P.saveNow(); w.postMessage({ type: 'skipWaiting' }); } });
+    const apply = (w) => { updating = true; P.saveNow(); w.postMessage({ type: 'skipWaiting' }); };
+    // A new version switches over by itself when nothing is playing or being imported/edited;
+    // otherwise a "Restart" prompt stays on screen until it's tapped.
+    const busy = () => !P.engine.paused || importState.active || !!document.querySelector('.dialog-wrap');
+    const offer = (w) => (busy() ? toast('A new version of Lark is ready', { label: 'Restart', run: () => apply(w) }, { sticky: true }) : apply(w));
     if (reg.waiting && navigator.serviceWorker.controller) offer(reg.waiting);
     reg.addEventListener('updatefound', () => {
       const w = reg.installing;

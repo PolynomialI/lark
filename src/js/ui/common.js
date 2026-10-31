@@ -75,14 +75,20 @@ addEventListener('popstate', () => {
 export const overlayOpen = () => stack.length > 0;
 
 // ---------- toast ----------
-let toastTimer;
-export function toast(text, action) {
+let toastTimer, sticky = null;
+/** A short message at the bottom. { sticky: true } keeps it until its button is tapped (it comes back after other messages). */
+export function toast(text, action, { sticky: keep = false } = {}) {
+  if (keep) sticky = { text, action };
   const t = $('#toast');
   t.innerHTML = `<span>${esc(text)}</span>${action ? `<button class="toast-act">${esc(action.label)}</button>` : ''}`;
-  if (action) t.querySelector('button').onclick = () => { t.classList.remove('show'); action.run(); };
+  if (action) t.querySelector('button').onclick = () => { if (sticky?.action === action) sticky = null; t.classList.remove('show'); action.run(); };
   t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), action ? 6000 : 3000);
+  if (keep) return;
+  toastTimer = setTimeout(() => {
+    t.classList.remove('show');
+    if (sticky) toastTimer = setTimeout(() => toast(sticky.text, sticky.action, { sticky: true }), 300);
+  }, action ? 6000 : 3000);
 }
 
 // ---------- menus ----------

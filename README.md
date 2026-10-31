@@ -54,7 +54,7 @@ The app is static files built into `dist/`. Render builds it from this repositor
 
 Render static sites are free and don't sleep. Every push to `main` deploys automatically.
 
-**Updates never touch your library.** Your music and library data live in the browser's private storage (IndexedDB and OPFS) on each device. A new version only replaces the app's own cached files. When an update is ready, Lark shows "A new version of Lark is ready → Restart".
+**Updates never touch your library.** Your music and library data live in the browser's private storage (IndexedDB and OPFS) on each device. A new version only replaces the app's own cached files. It switches over by itself the next time you open Lark (or within a few seconds, if nothing is playing); while music is playing, Lark instead shows "A new version of Lark is ready → Restart" until you tap it.
 
 ## Development
 
@@ -81,7 +81,7 @@ What the tests check:
 | `edits.spec.mjs` | Song edits, cover upload and crop, cover paste, bulk edit, likes, playlist create/rename/cover/add/reorder, folders, pin, duplicate, all surviving a reload |
 | `export-import.spec.mjs` | Export → clear all storage → import gives back the exact same library (including a library over 1 GB); merge doesn't duplicate |
 | `zip64.spec.mjs` | A zip over 4 GB is written as ZIP64 by client-zip and read back by Lark's importer |
-| `offline.spec.mjs` | Works with the network off after the first visit; passes Chrome's installability checks; an app update keeps the library |
+| `offline.spec.mjs` | Works with the network off after the first visit; passes Chrome's installability checks; an app update keeps the library and switches over by itself |
 | `playback.spec.mjs` (panel) | The desktop "Now playing view" panel follows the current song and switches with the queue |
 | `phone.spec.mjs` | Phone layout: tabs, mini-player swipe to skip, swipe up/down for the full player, bottom-sheet menus, Back closes sheets |
 
