@@ -1,6 +1,6 @@
 // Pages: Home, Search, Library (phone tab), All songs, Liked Songs, Recently played, playlist,
 // album, artist, folder, lyrics and settings. Each returns { html, mount(root), deps }.
-import { EQ_BANDS, EQ_PRESETS } from '../engine.js';
+import { EQ_BANDS, EQ_PRESETS, MAX_VOLUME } from '../engine.js';
 import * as P from '../player.js';
 import { search } from '../search.js';
 import * as store from '../store.js';
@@ -252,6 +252,7 @@ export const views = {
 
   settings() {
     const st = L.settings;
+    const vol = P.engine.muted ? 0 : P.engine.volume;
     const presetOpts = Object.keys(EQ_PRESETS).map((k) => `<option value="${k}"${st.eq.preset === k ? ' selected' : ''}>${{ flat: 'Flat', bass: 'Bass booster', 'bass-down': 'Bass reducer', treble: 'Treble booster', vocal: 'Vocal', rock: 'Rock', pop: 'Pop', acoustic: 'Acoustic', electronic: 'Electronic' }[k]}</option>`).join('') + `<option value="custom"${st.eq.preset === 'custom' ? ' selected' : ''}>Custom</option>`;
     const bands = EQ_BANDS.map((f, i) => `<label class="eq-band"><input type="range" min="-12" max="12" step="1" value="${st.eq.gains[i]}" data-band="${i}" aria-label="${f} Hz" orient="vertical"><span>${f >= 1000 ? `${f / 1000}k` : f}</span></label>`).join('');
     return {
@@ -267,6 +268,8 @@ export const views = {
           <div class="set-row"><div><b>Storage</b><p id="storage-info">Checking…</p></div></div>
         </section>
         <section><h2>Playback</h2>
+          <div class="set-row"><div><b>Volume</b><p>Up to 150%. Above 100%, Lark boosts the sound (a limiter keeps loud songs from distorting). Your phone's volume buttons still work as usual.</p></div>
+            <div class="slider-val"><input type="range" class="range" data-bind="vol" min="0" max="150" value="${Math.round(vol * 100)}" style="--p:${(vol / MAX_VOLUME) * 100}%" aria-label="Volume"><output data-bind="vol-pct">${Math.round(vol * 100)}%</output></div></div>
           <div class="set-row"><div><b>Crossfade</b><p>Fade songs into each other. At 0 s songs play back to back (gapless).</p></div>
             <div class="slider-val"><input type="range" class="range" id="set-xfade" min="0" max="12" step="1" value="${st.crossfade}" style="--p:${(st.crossfade / 12) * 100}%"><output>${st.crossfade} s</output></div></div>
           <div class="set-row"><div><b>Normalise volume</b><p>Play all songs at a similar loudness (uses ReplayGain tags, or measures each song).</p></div>
@@ -274,7 +277,7 @@ export const views = {
           <div class="set-row"><div><b>Equaliser</b><p>Shape the sound with a preset or your own settings.</p></div>
             <label class="switch"><input type="checkbox" id="set-eq"${st.eq.enabled ? ' checked' : ''}><span></span></label></div>
           <div class="eq${st.eq.enabled ? '' : ' off'}"><select class="input" id="set-preset" aria-label="Equaliser preset">${presetOpts}</select><div class="eq-bands">${bands}</div></div>
-          <p class="hint">Crossfade, normalisation and the equaliser use Web Audio. With all three off, Lark plays through the plain audio player, which is the most reliable for playing with the screen off.</p>
+          <p class="hint">Crossfade, normalisation, the equaliser and volume above 100% use Web Audio. With all of them off, Lark plays through the plain audio player, which is the most reliable for playing with the screen off.</p>
         </section>
         ${isMobile() ? '' : `<section><h2>Keyboard shortcuts</h2><dl class="keys">
           <dt>Space</dt><dd>Play / pause</dd><dt>Shift + → / ←</dt><dd>Next / previous song</dd><dt>→ / ←</dt><dd>Seek 5 seconds</dd>

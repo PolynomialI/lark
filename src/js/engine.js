@@ -1,6 +1,6 @@
 // Audio engine. Two <audio> elements ("slots") take turns so the next song is already loaded:
 // it starts right as the current one ends (near-gapless) or overlaps it (crossfade).
-// Web Audio (needed for crossfade, EQ and normalisation) is only used while one of those is on;
+// Web Audio (needed for crossfade, EQ, normalisation and volume above 100%) is only used while one of those is on;
 // otherwise the elements play directly, which is the most reliable for background play on phones.
 import * as opfs from './opfs.js';
 import { Emitter } from './util.js';
@@ -11,7 +11,8 @@ export const EQ_PRESETS = {
   treble: [0, 0, 0, 1, 4, 6], vocal: [-2, -1, 2, 4, 3, 0], rock: [4, 2, -1, 1, 3, 4],
   pop: [-1, 2, 4, 3, 0, -1], acoustic: [3, 2, 1, 2, 2, 2], electronic: [5, 3, 0, -1, 2, 4],
 };
-export const GAP_LEAD = 0.01; // seconds before the end at which the next song is started when not crossfading
+export const GAP_LEAD = 0.01;
+export const MAX_VOLUME = 1.5; // 150%: above 100% the sound is boosted through Web Audio, with a limiter // seconds before the end at which the next song is started when not crossfading
 const db2gain = (db) => 10 ** (db / 20);
 
 export class Engine extends Emitter {
@@ -27,6 +28,7 @@ export class Engine extends Emitter {
   volume = 0.8;
   muted = false;
   #timer = 0;
+  #switching = Promise.resolve();
 
   constructor() { super(); this.#build(false); }
   get slot() { return this.slots[this.cur]; }
@@ -52,6 +54,10 @@ export class Engine extends Emitter {
         return b;
       });
       this.filters.reduce((a, b) => (a.connect(b), b)).connect(this.master);
+      // Limiter, used only when the volume is above 100%, so boosted loud songs don't distort.
+      this.limiter = this.ctx.createDynamicsCompressor();
+      Object.entries({ threshold: -1.5, knee: 0, ratio: 20, attack: 0.002, release: 0.15 }).forEach(([k, v]) => { this.limiter[k].value = v; });
+      this.limiter.connect(this.ctx.destination);
       this.master.connect(this.ctx.destination);
       this.ctx.onstatechange = () => { if (this.ctx?.state === 'suspended' && !this.el.paused) this.ctx.resume(); };
     }
@@ -103,8 +109,24 @@ export class Engine extends Emitter {
   }
   #applyVolume() {
     const v = this.muted ? 0 : this.volume;
-    if (this.web) { this.master.gain.value = v; this.slots.forEach((s) => { s.el.volume = 1; }); }
-    else this.slots.forEach((s) => { s.el.volume = v; });
+    if (this.web) {
+      this.master.gain.value = v;
+      this.slots.forEach((s) => { s.el.volume = 1; });
+      this.master.disconnect();
+      this.master.connect(v > 1 ? this.limiter : this.ctx.destination);
+    } else this.slots.forEach((s) => { s.el.volume = Math.min(1, v); });
+  }
+  #needWeb() { return this.opts.crossfade > 0 || this.opts.normalize || this.opts.eq.enabled || this.volume > 1; }
+  /** Switch between plain and Web Audio output (one switch at a time), keeping the song and position. */
+  #switchMode() {
+    return (this.#switching = this.#switching.then(async () => {
+      const need = this.#needWeb();
+      if (need === this.web) { this.#applyVolume(); return; }
+      const song = this.song, t = this.currentTime, playing = !this.paused, next = this.next;
+      this.#build(need);
+      if (song) await this.load(song, { autoplay: playing, at: t });
+      if (next) this.preload(next);
+    }));
   }
   #applyEq() {
     if (!this.web) return;
@@ -112,19 +134,18 @@ export class Engine extends Emitter {
     this.filters.forEach((f, i) => { f.gain.value = on ? this.opts.eq.gains[i] || 0 : 0; });
   }
 
-  setVolume(v) { this.volume = v; this.#applyVolume(); this.emit('volume'); }
+  setVolume(v) {
+    this.volume = Math.max(0, Math.min(MAX_VOLUME, v));
+    if (this.#needWeb() !== this.web) this.#switchMode(); else this.#applyVolume();
+    this.emit('volume');
+  }
   setMuted(m) { this.muted = m; this.#applyVolume(); this.emit('volume'); }
 
   /** Apply crossfade / normalisation / EQ settings, switching between plain and Web Audio output if needed. */
   async setOptions(opts) {
     this.opts = { ...this.opts, ...opts };
-    const needWeb = this.opts.crossfade > 0 || this.opts.normalize || this.opts.eq.enabled;
-    if (needWeb !== this.web) {
-      const song = this.song, t = this.currentTime, playing = !this.paused, next = this.next;
-      this.#build(needWeb);
-      if (song) await this.load(song, { autoplay: playing, at: t });
-      if (next) this.preload(next);
-    } else {
+    if (this.#needWeb() !== this.web) await this.#switchMode();
+    else {
       this.slots.forEach((s) => this.#applyNorm(s));
       this.#applyEq();
       this.#check();

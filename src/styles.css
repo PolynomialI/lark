@@ -433,7 +433,7 @@ body:not(.has-song) .pb-left .like, body:not(.has-song) .pb-art { visibility: hi
 .set-btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .ok { color: #6fd38a; width: 16px; height: 16px; vertical-align: -3px; }
 .slider-val { display: flex; align-items: center; gap: 12px; width: 220px; flex: none; }
-.slider-val output { width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+.slider-val output { width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
 .eq { display: grid; gap: 16px; padding: 14px 0; justify-items: start; }
 .eq.off { opacity: .4; pointer-events: none; }
 .eq select { width: auto; }

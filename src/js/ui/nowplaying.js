@@ -1,6 +1,7 @@
 // Player UI: desktop player bar, phone mini-player (swipe to skip, swipe up to open),
 // full-screen now-playing view, queue panel, lyrics view and sleep timer menu.
 import { isSynced, parseLrc } from '../lrc.js';
+import { MAX_VOLUME } from '../engine.js';
 import * as P from '../player.js';
 import * as store from '../store.js';
 import { $, $$, clamp, esc, fmtTime, isMobile } from '../util.js';
@@ -20,7 +21,7 @@ export function playerBarHtml() {
       <div class="pb-meta"><a class="pb-t" data-bind="title"></a><div class="pb-a" data-bind="artist"></div></div>${btn('like-current', 'heart', 'Save to Liked Songs', 'like', 'icon-btn like')}</div>
     <div class="pb-center">${controlsHtml()}${seekHtml()}</div>
     <div class="pb-right">${btn('npv', 'square-play', 'Now playing view', 'npv-btn')}${btn('lyrics', 'mic-vocal', 'Lyrics', 'lyrics-btn')}${btn('queue', 'list-music', 'Queue', 'queue-btn')}${btn('sleep-menu', 'moon', 'Sleep timer', 'sleep')}
-      ${btn('mute', 'volume-2', 'Mute', 'mute')}<input type="range" class="range vol" data-bind="vol" min="0" max="100" aria-label="Volume">${btn('np-open', 'maximize-2', 'Full screen')}</div>
+      ${btn('mute', 'volume-2', 'Mute', 'mute')}<input type="range" class="range vol" data-bind="vol" min="0" max="150" aria-label="Volume">${btn('np-open', 'maximize-2', 'Full screen')}</div>
   </footer>
   <div class="mini" id="mini" hidden><div class="mini-in"><div class="mini-art" data-bind="cover"></div>
     <div class="mini-meta"><div class="mini-t" data-bind="title"></div><div class="mini-a" data-bind="artist"></div></div>
@@ -96,7 +97,8 @@ function updateModes() {
 }
 function updateVolume() {
   const v = engine.muted ? 0 : engine.volume;
-  each('vol', (el) => { el.value = Math.round(v * 100); el.style.setProperty('--p', `${v * 100}%`); });
+  each('vol', (el) => { el.value = Math.round(v * 100); el.style.setProperty('--p', `${(v / MAX_VOLUME) * 100}%`); el.title = `Volume ${Math.round(v * 100)}%`; });
+  each('vol-pct', (el) => { el.textContent = `${Math.round(v * 100)}%`; });
   each('mute', (el) => { el.innerHTML = ic(v === 0 ? 'volume-x' : v < 0.5 ? 'volume-1' : 'volume-2'); el.setAttribute('aria-label', engine.muted ? 'Unmute' : 'Mute'); });
 }
 function updateSleep() {
@@ -128,7 +130,7 @@ document.addEventListener('input', (e) => {
     each('cur', (el) => { el.textContent = fmtTime(p * engine.duration); });
   } else if (b === 'vol') {
     const v = e.target.value / 100;
-    e.target.style.setProperty('--p', `${v * 100}%`);
+    e.target.style.setProperty('--p', `${(v / MAX_VOLUME) * 100}%`);
     if (engine.muted) engine.setMuted(false);
     engine.setVolume(v);
     saveVolume();

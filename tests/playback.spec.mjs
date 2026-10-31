@@ -225,3 +225,22 @@ test('desktop "Now playing view" panel shows the current song, and switches with
   await right.locator('[data-act="panel-close"]').click();
   await expect(right).toBeHidden();
 });
+
+test('volume goes up to 150%: above 100% it is boosted (with a limiter), at or below 100% it uses the plain player', async ({ page }) => {
+  await playAlbum(page, 0);
+  const setVol = (pct) => page.locator('#pbar [data-bind="vol"]').evaluate((el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }, pct);
+  const state = () => page.evaluate(() => { const e = window.__lark.engine; return { volume: e.volume, web: e.web, gain: e.master?.gain.value, el: e.el.volume, playing: !e.paused }; });
+  await setVol(150);
+  await expect.poll(state).toMatchObject({ volume: 1.5, web: true, gain: 1.5, el: 1, playing: true });
+  await page.waitForFunction(() => window.__lark.engine.currentTime > 0.3); // still playing after the switch
+  await setVol(80);
+  await expect.poll(state).toMatchObject({ volume: 0.8, web: false, el: 0.8, playing: true });
+  // Settings has the same slider (phones have no volume slider in the player); the level is saved.
+  await setVol(120);
+  await page.goto('/#/settings');
+  await expect(page.locator('.settings [data-bind="vol-pct"]')).toHaveText('120%');
+  await page.waitForTimeout(600);
+  await page.reload();
+  await page.waitForSelector('html[data-ready="1"]', { state: 'attached' });
+  expect(await page.evaluate(() => [window.__lark.store.lib.settings.volume, window.__lark.engine.volume, window.__lark.engine.web])).toEqual([1.2, 1.2, true]);
+});
