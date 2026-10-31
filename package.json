@@ -1,0 +1,21 @@
+{
+  "name": "lark",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --serve",
+    "test": "node build.mjs && playwright test"
+  },
+  "dependencies": {
+    "client-zip": "2.5.1",
+    "music-metadata": "12.3.3"
+  },
+  "devDependencies": {
+    "@fontsource-variable/figtree": "5.3.0",
+    "@playwright/test": "1.63.0",
+    "esbuild": "0.28.2",
+    "lucide-static": "1.66.0"
+  }
+}
