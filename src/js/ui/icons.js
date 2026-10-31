@@ -46,7 +46,17 @@ import listPlus from 'lucide-static/icons/list-plus.svg';
 import listStart from 'lucide-static/icons/list-start.svg';
 import arrowUpDown from 'lucide-static/icons/arrow-up-down.svg';
 import folderInput from 'lucide-static/icons/folder-input.svg';
+import squarePlay from 'lucide-static/icons/square-play.svg';
+import panelRightClose from 'lucide-static/icons/panel-right-close.svg';
+import circlePlus from 'lucide-static/icons/circle-plus.svg';
+import circleCheck from 'lucide-static/icons/circle-check.svg';
+import clipboardPaste from 'lucide-static/icons/clipboard-paste.svg';
 const SVG = {
+  'square-play': squarePlay,
+  'panel-right-close': panelRightClose,
+  'circle-plus': circlePlus,
+  'circle-check': circleCheck,
+  'clipboard-paste': clipboardPaste,
   'play': play,
   'pause': pause,
   'skip-back': skipBack,

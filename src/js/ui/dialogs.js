@@ -1,7 +1,7 @@
 // Edit dialogs: song details, bulk edit, playlist details, cover upload/crop, reuse an existing cover.
-import { dominantColor } from '../color.js';
+import { dominantColor, makeCoverBlob } from '../color.js';
 import * as store from '../store.js';
-import { esc } from '../util.js';
+import { esc, isTouch } from '../util.js';
 import { coverHtml, openDialog, toast } from './common.js';
 import { ic } from './icons.js';
 
@@ -10,8 +10,10 @@ function coverField(previewIds, { keep = false, removeLabel = 'Remove' } = {}) {
   const state = { value: undefined }; // undefined = unchanged, null = removed, string = cover id
   const html = `<div class="cover-field"><div class="cf-preview">${coverHtml(previewIds, { cls: 'lg' })}</div>
     <div class="cf-btns"><label class="btn small">${ic('upload')}<span>Upload image</span><input type="file" accept="image/*" hidden></label>
+    <button type="button" class="btn small" data-cf="paste">${ic('clipboard-paste')}<span>Paste image</span></button>
     <button type="button" class="btn small" data-cf="pick">${ic('image')}<span>Use another cover</span></button>
     <button type="button" class="btn small" data-cf="remove">${ic('trash-2')}<span>${removeLabel}</span></button>
+    ${isTouch() ? '' : '<div class="cf-note">Or copy an image and press Ctrl+V.</div>'}
     ${keep ? '<div class="cf-note">Leave unchanged to keep each song\'s cover.</div>' : ''}</div></div>`;
   const mount = (root, fallback = () => []) => {
     const prev = root.querySelector('.cf-preview');
@@ -24,6 +26,36 @@ function coverField(previewIds, { keep = false, removeLabel = 'Remove' } = {}) {
       if (id) { state.value = id; show(); }
     };
     root.querySelector('[data-cf=pick]').onclick = async () => { const id = await pickCover(); if (id) { state.value = id; show(); } };
+    // Paste: the image is square-cropped from the centre and used straight away.
+    const useImage = (blob) => (state.pending = (async () => {
+      try {
+        const made = await makeCoverBlob(blob);
+        const id = await store.addCover(made.blob);
+        await store.setCoverColor(id, made.color);
+        state.value = id;
+        show();
+      } catch { toast("That image can't be used"); }
+    })());
+    root.querySelector('[data-cf=paste]').onclick = async () => {
+      if (!navigator.clipboard?.read) return toast('Copy an image, then press Ctrl+V here');
+      try {
+        for (const item of await navigator.clipboard.read()) {
+          const type = item.types.find((t) => t.startsWith('image/'));
+          if (type) return useImage(await item.getType(type));
+        }
+        toast('No image on the clipboard. Copy an image first.');
+      } catch { toast('Allow clipboard access to paste images'); }
+    };
+    const onPaste = (e) => {
+      if (!root.isConnected) return document.removeEventListener('paste', onPaste);
+      const open = document.querySelectorAll('.dialog-wrap');
+      if (open[open.length - 1] !== root) return; // only the dialog on top
+      const file = [...(e.clipboardData?.files || [])].find((f) => f.type.startsWith('image/'));
+      if (!file) return; // plain text pastes into the fields as usual
+      e.preventDefault();
+      useImage(file);
+    };
+    document.addEventListener('paste', onPaste);
     root.querySelector('[data-cf=remove]').onclick = () => { state.value = null; show(); };
   };
   return { html, mount, state };
@@ -44,6 +76,7 @@ export function editSong(id) {
     actions: [{ label: 'Cancel' }, { label: 'Save', primary: true, run: async (r) => {
       const v = (n) => r.querySelector(`[name=${n}]`).value.trim();
       const patch = { title: v('title') || s.name, artist: v('artist'), album: v('album'), lyrics: r.querySelector('[name=lyrics]').value };
+      await cf.state.pending; // a pasted image still being processed
       if (cf.state.value !== undefined) patch.coverId = cf.state.value;
       await store.updateSongs([id], patch);
       toast('Saved');
@@ -67,6 +100,7 @@ export function bulkEdit(ids) {
     actions: [{ label: 'Cancel' }, { label: 'Save', primary: true, run: async (r) => {
       const patch = {};
       for (const k of ['artist', 'album', 'albumArtist']) { const v = r.querySelector(`[name=${k}]`).value.trim(); if (v) patch[k] = v; }
+      await cf.state.pending; // a pasted image still being processed
       if (cf.state.value !== undefined) patch.coverId = cf.state.value;
       await store.updateSongs(songs.map((s) => s.id), patch);
       toast(`Updated ${songs.length} songs`);
@@ -87,6 +121,7 @@ export function editPlaylist(id) {
     onMount: (r) => cf.mount(r, auto),
     actions: [{ label: 'Cancel' }, { label: 'Save', primary: true, run: async (r) => {
       const patch = { name: r.querySelector('[name=name]').value.trim() || p.name, description: r.querySelector('[name=description]').value.trim() };
+      await cf.state.pending; // a pasted image still being processed
       if (cf.state.value !== undefined) patch.coverId = cf.state.value;
       await store.updatePlaylist(id, patch);
     } }],

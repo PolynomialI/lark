@@ -36,7 +36,7 @@ test('desktop screenshots', async ({ page }) => {
   const { road, album } = await setup(page);
   await page.waitForTimeout(800);
   await page.goto('/#/'); await page.waitForTimeout(500); await shot(page, 'desktop-home');
-  await page.goto(`/#/playlist/${road}`); await page.waitForTimeout(500); await shot(page, 'desktop-playlist');
+  await page.goto(`/#/playlist/${road}`); await page.waitForTimeout(500); await shot(page, 'desktop-playlist'); // with the Now playing view
   await page.click('#pbar [data-act="queue"]'); await page.waitForTimeout(300); await shot(page, 'desktop-queue');
   await page.click('#pbar [data-act="queue"]');
   await page.goto(`/#/album/${encodeURIComponent(album)}`); await page.waitForTimeout(500); await shot(page, 'desktop-album');
@@ -60,7 +60,7 @@ test.describe('phone', () => {
     await page.locator('.tl-body .tr').nth(1).locator('[data-more]').tap(); await page.waitForTimeout(400); await shot(page, 'phone-song-menu');
     await page.goBack(); await page.waitForTimeout(300);
     await page.locator('#mini .mini-meta').tap(); await page.waitForTimeout(700); await shot(page, 'phone-now-playing');
-    await page.locator('.np [data-act="lyrics"]').tap(); await page.waitForTimeout(1500); await shot(page, 'phone-lyrics');
+    await page.locator('.np .np-lyrics').tap(); await page.waitForTimeout(1500); await shot(page, 'phone-lyrics');
     await page.goBack(); await page.waitForTimeout(400);
     await page.locator('.np [data-act="queue"]').tap(); await page.waitForTimeout(500); await shot(page, 'phone-queue');
   });

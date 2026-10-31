@@ -1,5 +1,6 @@
 // Edits (names, covers, lyrics, bulk edits, playlists, folders, likes) are saved and survive a reload.
 import { test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { basic, FIX } from './fixtures.mjs';
 import { expect, importDir, openApp, snapshot } from './helpers.mjs';
@@ -107,4 +108,30 @@ test('edits to songs, covers, playlists, folders and likes survive a reload', as
   await page.goto(`/#/playlist/${gym.id}`);
   await expect(page.locator('.tl-body .t')).toHaveText(['Evening Glow', 'Red Song (Live)', 'Morning Light']);
   await expect(page.locator('.ph-desc')).toHaveText('Heavy lifting');
+});
+
+test('pasting an image sets the cover straight away (no file picker)', async ({ page }) => {
+  await openApp(page);
+  await importDir(page, basic());
+  await page.goto('/#/songs');
+  const before = await page.evaluate(() => [...window.__lark.store.lib.songs.values()].find((s) => s.title === 'Red Song').coverId);
+  await row(page, 'Red Song').click({ button: 'right' });
+  await page.locator('.menu-item', { hasText: 'Edit details' }).click();
+  await expect(page.locator('.dialog [name=title]')).toHaveValue('Red Song');
+  // Same as Ctrl+V with an image on the clipboard.
+  const jpg = readFileSync(join(FIX, 'cover-3366cc.jpg')).toString('base64');
+  await page.evaluate((b64) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], 'pasted.jpg', { type: 'image/jpeg' }));
+    document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+  }, jpg);
+  await expect(page.locator('.crop-dialog')).toHaveCount(0);
+  await page.locator('.dialog').getByRole('button', { name: 'Save' }).click();
+  await expect(page.locator('.dialog')).toHaveCount(0);
+  await page.reload();
+  await page.waitForSelector('html[data-ready="1"]', { state: 'attached' });
+  const after = await page.evaluate(() => { const L = window.__lark.store.lib; const s = [...L.songs.values()].find((x) => x.title === 'Red Song'); return { id: s.coverId, exists: L.covers.has(s.coverId), color: L.covers.get(s.coverId)?.color }; });
+  expect(after.id).not.toBe(before);
+  expect(after.exists).toBe(true);
+  expect(after.color).toBe('rgb(42,85,170)'); // the pasted blue image
 });

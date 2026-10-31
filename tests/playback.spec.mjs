@@ -207,3 +207,21 @@ test('resumes the same song, position and queue after the app is closed and reop
   await page.click('#pbar [data-bind="play"]');
   await page.waitForFunction(() => window.__lark.engine.currentTime > 2.5);
 });
+
+test('desktop "Now playing view" panel shows the current song, and switches with the queue', async ({ page }) => {
+  await playAlbum(page, 1);
+  const right = page.locator('#right');
+  await expect(right).toHaveAttribute('data-mode', 'np');
+  await expect(right.locator('.rh-t')).toHaveText('Tones');
+  await expect(right.locator('.npv-t')).toHaveText('Track 2');
+  await expect(right.locator('.npv-next .q-t')).toHaveText('Track 3');
+  await right.locator('[data-bind="save"]').click();
+  expect(await page.evaluate(() => window.__lark.store.isLiked(window.__lark.engine.song.id))).toBe(true);
+  await expect(right.locator('[data-bind="save"]')).toHaveClass(/saved/);
+  await page.click('#pbar [data-act="queue"]');
+  await expect(right).toHaveAttribute('data-mode', 'queue');
+  await page.click('#pbar [data-act="npv"]');
+  await expect(right.locator('.npv-t')).toHaveText('Track 2');
+  await right.locator('[data-act="panel-close"]').click();
+  await expect(right).toBeHidden();
+});

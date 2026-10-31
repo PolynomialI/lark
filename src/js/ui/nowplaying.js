@@ -16,10 +16,10 @@ const controlsHtml = () => `<div class="ctrls">${btn('shuffle', 'shuffle', 'Shuf
 
 export function playerBarHtml() {
   return `<footer class="pbar" id="pbar">
-    <div class="pb-left"><button class="pb-art" data-act="np-open" data-bind="cover" aria-label="Open now playing"></button>
+    <div class="pb-left"><button class="pb-art" data-act="npv" data-bind="cover" aria-label="Now playing view"></button>
       <div class="pb-meta"><a class="pb-t" data-bind="title"></a><div class="pb-a" data-bind="artist"></div></div>${btn('like-current', 'heart', 'Save to Liked Songs', 'like', 'icon-btn like')}</div>
     <div class="pb-center">${controlsHtml()}${seekHtml()}</div>
-    <div class="pb-right">${btn('sleep-menu', 'moon', 'Sleep timer', 'sleep')}${btn('lyrics', 'mic-vocal', 'Lyrics', 'lyrics-btn')}${btn('queue', 'list-music', 'Queue', 'queue-btn')}
+    <div class="pb-right">${btn('npv', 'square-play', 'Now playing view', 'npv-btn')}${btn('lyrics', 'mic-vocal', 'Lyrics', 'lyrics-btn')}${btn('queue', 'list-music', 'Queue', 'queue-btn')}${btn('sleep-menu', 'moon', 'Sleep timer', 'sleep')}
       ${btn('mute', 'volume-2', 'Mute', 'mute')}<input type="range" class="range vol" data-bind="vol" min="0" max="100" aria-label="Volume">${btn('np-open', 'maximize-2', 'Full screen')}</div>
   </footer>
   <div class="mini" id="mini" hidden><div class="mini-in"><div class="mini-art" data-bind="cover"></div>
@@ -42,6 +42,8 @@ function updateTrack() {
   each('artist', (el) => {
     el.innerHTML = !s ? '' : el.closest('.mini') ? esc(store.artistOf(s)) : `<a href="#/artist/${encodeURIComponent(store.artistKey(s.artist))}">${esc(store.artistOf(s))}</a>`;
   });
+  each('np-bg', (el) => { el.innerHTML = s?.coverId ? `<img src="${store.coverUrl(s.coverId)}" alt="">` : ''; });
+  each('np-lyrics', (el) => { const text = lyricsPreview(s); el.hidden = !text; el.querySelector('.lc-lines').textContent = text; });
   const mini = $('#mini');
   if (mini) mini.hidden = !s;
   document.body.classList.toggle('has-song', !!s);
@@ -54,6 +56,18 @@ function updateTrack() {
 export function updateLike() {
   const on = !!engine.song && store.isLiked(engine.song.id);
   each('like', (el) => { el.classList.toggle('on', on); el.setAttribute('aria-label', on ? 'Remove from Liked Songs' : 'Save to Liked Songs'); });
+  each('save', (el) => {
+    el.innerHTML = ic(on ? 'circle-check' : 'circle-plus');
+    el.classList.toggle('saved', on);
+    el.setAttribute('aria-label', on ? 'Remove from Liked Songs' : 'Save to Liked Songs');
+    el.title = el.getAttribute('aria-label');
+  });
+}
+/** First lines of a song's lyrics, for the lyrics card in the full-screen player. */
+function lyricsPreview(s) {
+  if (!s?.lyrics?.trim()) return '';
+  const lines = isSynced(s.lyrics) ? parseLrc(s.lyrics).map((l) => l.text) : s.lyrics.split(/\r?\n/);
+  return lines.map((l) => l.trim()).filter(Boolean).slice(0, 2).join('\n');
 }
 function updatePlay() {
   const playing = !!engine.song && !engine.paused;
@@ -135,7 +149,9 @@ Object.assign(acts, {
   mute: () => { engine.setMuted(!engine.muted); saveVolume(); },
   'np-open': () => engine.song && openNowPlaying(),
   'np-close': () => popOverlay(),
-  queue: () => (isMobile() || $('.np') ? openSheet('queue') : toggleRight()),
+  npv: () => (isMobile() ? engine.song && openNowPlaying() : setPanel(panel === 'np' && !$('#right').hidden ? '' : 'np')),
+  'panel-close': () => setPanel(''),
+  queue: () => (isMobile() || $('.np') ? openSheet('queue') : setPanel(panel === 'queue' && !$('#right').hidden ? '' : 'queue')),
   lyrics: () => (isMobile() || $('.np') ? openSheet('lyrics') : go(location.hash === '#/lyrics' ? '#/' : '#/lyrics')),
   'sleep-menu': (el) => openMenu([
     ...(P.sleep ? [{ label: 'Turn off timer', icon: 'x', run: () => { P.setSleep(null); toast('Sleep timer off'); } }, '-'] : []),
@@ -152,14 +168,15 @@ Object.assign(acts, {
 function openNowPlaying() {
   const el = document.createElement('div');
   el.className = 'np';
-  const c = queue.context, from = c && store.contextName(c);
-  el.innerHTML = `<div class="np-bg"></div><div class="np-in">
+  const c = queue.context, from = c ? c.name || store.contextName(c) : '';
+  el.innerHTML = `<div class="np-bg" data-bind="np-bg"></div><div class="np-in">
     <div class="np-head">${btn('np-close', isMobile() ? 'chevron-down' : 'minimize-2', 'Close')}
-      <button class="np-from" data-act="np-ctx">${from ? `<small>Playing from ${esc(c.type === 'search' ? 'search' : c.type === 'liked' || c.type === 'songs' ? 'your library' : c.type)}</small><b>${esc(from)}</b>` : ''}</button>${btn('np-menu', 'ellipsis', 'More options')}</div>
+      <button class="np-from" data-act="np-ctx">${esc(from)}</button>${btn('np-menu', 'ellipsis', 'More options')}</div>
     <div class="np-art" data-bind="cover"></div>
-    <div class="np-info"><div class="np-meta"><div class="np-t" data-bind="title"></div><div class="np-a" data-bind="artist"></div></div>${btn('like-current', 'heart', 'Save to Liked Songs', 'like', 'icon-btn like lg')}</div>
+    <div class="np-info"><div class="np-thumb" data-bind="cover"></div><div class="np-meta"><div class="np-t" data-bind="title"></div><div class="np-a" data-bind="artist"></div></div>${btn('like-current', 'circle-plus', 'Save to Liked Songs', 'save', 'icon-btn save')}</div>
     ${seekHtml()}${controlsHtml()}
-    <div class="np-extra">${btn('sleep-menu', 'moon', 'Sleep timer', 'sleep')}${btn('lyrics', 'mic-vocal', 'Lyrics')}${btn('queue', 'list-music', 'Queue')}</div></div>`;
+    <div class="np-extra">${btn('sleep-menu', 'moon', 'Sleep timer', 'sleep')}<span class="spacer"></span><span class="desk-only">${btn('lyrics', 'mic-vocal', 'Lyrics')}</span>${btn('queue', 'list-music', 'Queue')}</div>
+    <button class="np-lyrics" data-act="lyrics" data-bind="np-lyrics" hidden><b>Lyrics</b><span class="lc-lines"></span></button></div>`;
   document.body.append(el);
   requestAnimationFrame(() => el.classList.add('open'));
   refreshAll();
@@ -291,11 +308,36 @@ function bindQueue(root) {
     addEventListener('pointerup', up);
   });
 }
-function toggleRight() {
-  const r = $('#right');
-  r.hidden = !r.hidden;
-  document.body.classList.toggle('right-open', !r.hidden);
+let panel = (() => { try { return localStorage.getItem('lark-panel') ?? 'np'; } catch { return 'np'; } })();
+function setPanel(mode) {
+  panel = mode;
+  try { localStorage.setItem('lark-panel', mode); } catch {}
   refreshPanels();
+}
+/** Desktop "Now playing view": context name, big cover, title/artist with save button, next in queue. */
+function nowPlayingPanel() {
+  const s = engine.song, c = queue.context;
+  const nextId = queue.peekNext(false), n = nextId && store.lib.songs.get(nextId);
+  const head = `${btn('panel-close', 'panel-right-close', 'Hide Now playing view')}<h2 class="rh-t"><button data-act="np-ctx">${esc(c ? c.name || store.contextName(c) || store.title(s) : store.title(s))}</button></h2>${btn('np-menu', 'ellipsis', 'More options')}${btn('np-open', 'maximize-2', 'Full screen')}`;
+  const body = `<div class="npv"><div class="npv-art">${coverHtml(s.coverId ? [s.coverId] : [], { cls: 'xl' })}</div>
+    <div class="npv-info"><div class="npv-meta"><a class="npv-t" href="${s.album ? `#/album/${encodeURIComponent(store.albumKey(s))}` : '#/'}">${esc(store.title(s))}</a>
+      <div class="npv-a"><a href="#/artist/${encodeURIComponent(store.artistKey(s.artist))}">${esc(store.artistOf(s))}</a></div></div>${btn('like-current', 'circle-plus', 'Save to Liked Songs', 'save', 'icon-btn save')}</div>
+    ${n ? `<section class="npv-card"><div class="npv-card-h"><h3>Next in queue</h3><button class="link-btn" data-act="queue">Open queue</button></div>
+      <div class="npv-next">${coverHtml(n.coverId ? [n.coverId] : [], { cls: 'sm' })}<div class="q-meta"><div class="q-t">${esc(store.title(n))}</div><div class="q-a">${esc(store.artistOf(n))}</div></div></div></section>` : ''}</div>`;
+  return { head, body };
+}
+function renderRight() {
+  const r = $('#right');
+  if (!r) return;
+  const mode = panel === 'np' && !engine.song ? '' : panel;
+  r.hidden = !mode;
+  document.body.classList.toggle('right-open', !!mode);
+  if (!mode) return;
+  r.dataset.mode = mode;
+  const { head, body } = mode === 'np' ? nowPlayingPanel() : { head: `<h2 class="rh-t">Queue</h2>${btn('panel-close', 'x', 'Close queue')}`, body: queueHtml() };
+  r.querySelector('.right-head').innerHTML = head;
+  r.querySelector('.right-body').innerHTML = body;
+  if (mode === 'np') updateLike();
 }
 
 // ---------- lyrics ----------
@@ -357,14 +399,15 @@ function openSheet(kind) {
   pushOverlay(() => { view?.destroy(); sheet = null; el.classList.remove('open'); setTimeout(() => el.remove(), 250); });
 }
 export function refreshPanels() {
+  renderRight();
   const r = $('#right');
-  if (r && !r.hidden) r.querySelector('.right-body').innerHTML = queueHtml();
   if (sheet?.kind === 'queue') sheet.body.innerHTML = queueHtml();
   for (const v of lyricViews) if (!v.el.isConnected) lyricViews.delete(v); else if (v.song !== engine.song || v.song?.lyrics !== v.lyricsText) v.render();
   each('lyrics-btn', (el) => el.classList.toggle('on', location.hash === '#/lyrics'));
-  each('queue-btn', (el) => el.classList.toggle('on', !r?.hidden));
+  each('queue-btn', (el) => el.classList.toggle('on', !!r && !r.hidden && r.dataset.mode === 'queue'));
+  each('npv-btn', (el) => el.classList.toggle('on', !!r && !r.hidden && r.dataset.mode === 'np'));
 }
 export function rightPanelHtml() {
-  return `<aside class="right panel" id="right" hidden><div class="right-head"><h2>Queue</h2>${btn('queue', 'x', 'Close queue')}</div><div class="right-body"></div></aside>`;
+  return `<aside class="right panel" id="right" hidden><div class="right-head"></div><div class="right-body"></div></aside>`;
 }
 export function bindRight() { bindQueue($('#right .right-body')); }

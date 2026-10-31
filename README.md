@@ -17,7 +17,7 @@ More in [docs/screenshots](docs/screenshots).
 
 - **Add music** by file picker, drag and drop, or a whole folder (computer). MP3 plus whatever the browser plays: M4A/AAC, FLAC, OGG, Opus, WAV. Tags are read: title, artist, album, album artist, track, year, genre, cover art, lyrics. A matching `.lrc` file gives synced lyrics. Files without tags use the name (`Artist - Title.mp3`). Duplicates (same file content) are skipped. Imports run in the background with a progress bar.
 - **Library**: Liked Songs, All songs, Recently played, automatic Albums and Artists pages from the tags, playlists with folders and pinning, "Your Library" with filters, sorting and list/grid view, and typo-tolerant search.
-- **Editing**: song title, artist, album, cover (upload and crop, or reuse another cover) and lyrics; bulk edit of several songs; playlist name, description and cover (default: a 4-cover mosaic). Your original files are never changed.
+- **Editing**: song title, artist, album, cover (paste an image with Ctrl+V or "Paste image", upload and crop, or reuse another cover) and lyrics; bulk edit of several songs; playlist name, description and cover (default: a 4-cover mosaic). Your original files are never changed.
 - **Playback**: shuffle (every song once before repeats), repeat off/all/one, queue ("Next in queue" before "Next from: …"; play next, add, reorder, remove, clear), previous restarts the song after 3 s, crossfade 0–12 s, near-gapless playback, volume normalisation (ReplayGain tags, otherwise measured), a 6-band equaliser with presets, a sleep timer (minutes or end of song), and synced lyrics. Lark remembers the song, position and queue after closing.
 - **Controls**: lock screen, notification, Bluetooth/headphone buttons and keyboard media keys (Media Session), plus keyboard shortcuts on computers (listed in Settings).
 - **Export / import**: one `.zip` with everything (songs as-is, covers, edits, playlists, likes, history, settings). It is written as a stream, so it needs no extra memory or disk space, and it supports libraries over 4 GB (ZIP64). Import replaces or merges.
@@ -78,10 +78,11 @@ What the tests check:
 | --- | --- |
 | `import.spec.mjs` | Tagged and untagged MP3s, covers, embedded and `.lrc` lyrics, duplicate skipping; 1,000 files import with progress while the app stays responsive |
 | `playback.spec.mjs` | Repeat cycle, shuffle (no repeats until all played), queue order and editing, previous, near-gapless hand-over, crossfade overlap, sleep timer, resume after reload |
-| `edits.spec.mjs` | Song edits, cover upload and crop, bulk edit, likes, playlist create/rename/cover/add/reorder, folders, pin, duplicate, all surviving a reload |
+| `edits.spec.mjs` | Song edits, cover upload and crop, cover paste, bulk edit, likes, playlist create/rename/cover/add/reorder, folders, pin, duplicate, all surviving a reload |
 | `export-import.spec.mjs` | Export → clear all storage → import gives back the exact same library (including a library over 1 GB); merge doesn't duplicate |
 | `zip64.spec.mjs` | A zip over 4 GB is written as ZIP64 by client-zip and read back by Lark's importer |
 | `offline.spec.mjs` | Works with the network off after the first visit; passes Chrome's installability checks; an app update keeps the library |
+| `playback.spec.mjs` (panel) | The desktop "Now playing view" panel follows the current song and switches with the queue |
 | `phone.spec.mjs` | Phone layout: tabs, mini-player swipe to skip, swipe up/down for the full player, bottom-sheet menus, Back closes sheets |
 
 ## How it's built
