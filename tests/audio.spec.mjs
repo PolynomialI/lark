@@ -70,3 +70,24 @@ test('loudness is measured like Spotify / EBU R128, and Normal and Loud levels s
   db = await gainFor('Quiet Pink');
   expect(db).toBeCloseTo(Math.min(20, -11 - songs['Quiet Pink'].lufs), 1);
 });
+
+test('equaliser boosts go through the limiter too (no clipping)', async ({ page }) => {
+  await openApp(page);
+  // Same audio graph as Lark's: EQ filters all at +12 dB → master → limiter; render a loud signal offline.
+  const peak = await page.evaluate(async () => {
+    const sr = 44100, ctx = new OfflineAudioContext(2, sr * 3, sr);
+    await ctx.audioWorklet.addModule('limiter-worklet.js');
+    const buf = ctx.createBuffer(2, sr * 3, sr);
+    for (let ch = 0; ch < 2; ch++) { const d = buf.getChannelData(ch); for (let i = 0; i < d.length; i++) d[i] = 0.9 * Math.sin(2 * Math.PI * 220 * i / sr); }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const filters = [60, 150, 400, 1000, 2400, 15000].map((f, i, a) => { const b = ctx.createBiquadFilter(); b.type = i === 0 ? 'lowshelf' : i === a.length - 1 ? 'highshelf' : 'peaking'; b.frequency.value = f; b.Q.value = 1; b.gain.value = 12; return b; });
+    const lim = new AudioWorkletNode(ctx, 'lark-limiter', { outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit' });
+    src.connect(filters[0]);
+    filters.reduce((a, b) => (a.connect(b), b)).connect(lim).connect(ctx.destination);
+    src.start();
+    const out = (await ctx.startRendering()).getChannelData(0);
+    return out.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+  });
+  expect(peak).toBeLessThanOrEqual(0.945);
+});

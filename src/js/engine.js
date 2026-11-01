@@ -55,7 +55,7 @@ export class Engine extends Emitter {
         return b;
       });
       this.filters.reduce((a, b) => (a.connect(b), b)).connect(this.master);
-      // Limiter, used when the volume is above 100% or normalisation is on Loud, so loud songs don't distort.
+      // Limiter: keeps volume boosts, Loud normalisation and equaliser boosts from distorting.
       this.limiter = await this.#makeLimiter();
       this.limiter.connect(this.ctx.destination);
       this.master.connect(this.ctx.destination);
@@ -136,9 +136,10 @@ export class Engine extends Emitter {
     if (this.web) {
       this.master.gain.value = v;
       this.slots.forEach((s) => { s.el.volume = 1; });
+      // Always through the limiter: it does nothing below the ceiling, and stops volume boosts,
+      // Loud normalisation and equaliser boosts from clipping.
       this.master.disconnect();
-      const limit = v > 1 || (this.opts.normalize && this.opts.normLevel === 'loud');
-      this.master.connect(limit ? this.limiter : this.ctx.destination);
+      this.master.connect(this.limiter);
     } else this.slots.forEach((s) => { s.el.volume = Math.min(1, v); });
   }
   #needWeb() { return this.opts.crossfade > 0 || this.opts.normalize || this.opts.eq.enabled || this.volume > 1; }
