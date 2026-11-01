@@ -98,7 +98,7 @@ store.events.on('change', (what) => {
   if (current && (what === 'all' || current.view.deps?.includes(what))) scheduleRender();
 });
 store.events.on('settings', (patch) => {
-  if ('libFilter' in patch || 'libSort' in patch || 'libView' in patch) { renderSidebar(); if (current?.r.name === 'library') render(true); }
+  if ('libFilter' in patch || 'libSort' in patch || 'libView' in patch || 'libHidden' in patch) { renderSidebar(); if (current?.r.name === 'library') render(true); }
 });
 function refreshPlayButtons() {
   $$('.big-play[data-ctx]').forEach((b) => {

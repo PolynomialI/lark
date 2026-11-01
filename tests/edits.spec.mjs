@@ -135,3 +135,30 @@ test('pasting an image sets the cover straight away (no file picker)', async ({ 
   expect(after.exists).toBe(true);
   expect(after.color).toBe('rgb(42,85,170)'); // the pasted blue image
 });
+
+test('albums, artists and All songs can be removed from Your Library, and added back', async ({ page }) => {
+  await openApp(page);
+  await importDir(page, basic());
+  const side = (name) => page.locator('#side-lib .li').filter({ has: page.locator('.li-t', { hasText: new RegExp(`^${name}$`) }) });
+  await expect(side('Crimson Band')).toHaveCount(1);
+  await side('Crimson Band').click({ button: 'right' });
+  await page.locator('.menu-item', { hasText: 'Remove from Your Library' }).click();
+  await expect(side('Crimson Band')).toHaveCount(0);
+  await side('All songs').click({ button: 'right' });
+  await page.locator('.menu-item', { hasText: 'Remove from Your Library' }).click();
+  await expect(side('All songs')).toHaveCount(0);
+  // Undo brings the last one back.
+  await page.locator('#toast .toast-act', { hasText: 'Undo' }).click();
+  await expect(side('All songs')).toHaveCount(1);
+  // Still removed after a reload; nothing was deleted.
+  await page.reload();
+  await page.waitForSelector('html[data-ready="1"]', { state: 'attached' });
+  await expect(side('Crimson Band')).toHaveCount(0);
+  expect(await page.evaluate(() => window.__lark.store.lib.songs.size)).toBe(4);
+  // Its page is still there; the ⋯ menu adds it back.
+  await page.goto(`/#/artist/${encodeURIComponent('crimson band')}`);
+  await expect(page.locator('.ph-title')).toHaveText('Crimson Band');
+  await page.click('.ab [data-act="ctx-menu"]');
+  await page.locator('.menu-item', { hasText: 'Add to Your Library' }).click();
+  await expect(side('Crimson Band')).toHaveCount(1);
+});

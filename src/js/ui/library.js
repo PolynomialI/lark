@@ -20,12 +20,12 @@ function items() {
       out.push({ c: { type: 'playlist', id: p.id }, name: p.name, pinned: p.pinned, added: p.createdAt, recent: Math.max(p.playedAt || 0, p.createdAt) });
     }
   }
-  if (f === 'all' || f === 'albums') for (const a of store.albums().values()) out.push({ c: { type: 'album', id: a.key }, name: a.name, added: a.addedAt, recent: Math.max(recent.get(`album:${a.key}`) || 0, a.addedAt) });
-  if (f === 'all' || f === 'artists') for (const a of store.artists().values()) out.push({ c: { type: 'artist', id: a.key }, name: a.name, added: a.addedAt, recent: Math.max(recent.get(`artist:${a.key}`) || 0, a.addedAt) });
+  if (f === 'all' || f === 'albums') for (const a of store.albums().values()) if (!store.isHiddenInLibrary({ type: 'album', id: a.key })) out.push({ c: { type: 'album', id: a.key }, name: a.name, added: a.addedAt, recent: Math.max(recent.get(`album:${a.key}`) || 0, a.addedAt) });
+  if (f === 'all' || f === 'artists') for (const a of store.artists().values()) if (!store.isHiddenInLibrary({ type: 'artist', id: a.key })) out.push({ c: { type: 'artist', id: a.key }, name: a.name, added: a.addedAt, recent: Math.max(recent.get(`artist:${a.key}`) || 0, a.addedAt) });
   const s = L.settings.libSort;
   out.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)
     || (s === 'alpha' ? a.name.localeCompare(b.name) : s === 'added' ? b.added - a.added : b.recent - a.recent));
-  const fixed = f === 'all' || f === 'playlists' ? [{ c: { type: 'liked' }, pinned: true }, { c: { type: 'songs' }, pinned: true }] : [];
+  const fixed = (f === 'all' || f === 'playlists' ? [{ c: { type: 'liked' }, pinned: true }, { c: { type: 'songs' }, pinned: true }] : []).filter((x) => !store.isHiddenInLibrary(x.c));
   return [...fixed, ...out];
 }
 

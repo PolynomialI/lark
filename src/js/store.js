@@ -6,7 +6,7 @@ import { Emitter, norm, sha256, uid } from './util.js';
 export const DEFAULT_SETTINGS = {
   volume: 0.8, muted: false, crossfade: 0, normalize: false,
   eq: { enabled: false, preset: 'flat', gains: [0, 0, 0, 0, 0, 0] },
-  libFilter: 'all', libSort: 'recents', libView: 'list',
+  libFilter: 'all', libSort: 'recents', libView: 'list', libHidden: [],
 };
 
 export const lib = {
@@ -249,6 +249,15 @@ export function lastPlayed(type, id) {
 }
 
 // ---------- settings ----------
+// Albums, artists, All songs and Liked Songs can be removed from (hidden in) the Your Library list.
+const libItemKey = (c) => `${c.type}:${c.id ?? ''}`;
+export const isHiddenInLibrary = (c) => (lib.settings.libHidden || []).includes(libItemKey(c));
+export function setHiddenInLibrary(c, hidden) {
+  const set = new Set(lib.settings.libHidden || []);
+  if (hidden) set.add(libItemKey(c)); else set.delete(libItemKey(c));
+  return setSettings({ libHidden: [...set] });
+}
+
 export async function setSettings(patch) {
   Object.assign(lib.settings, patch);
   await db.kvSet('settings', lib.settings);

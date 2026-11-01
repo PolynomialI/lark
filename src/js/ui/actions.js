@@ -84,7 +84,7 @@ export function ctxMenu(c, at) {
       } }];
     items = tidy(items);
   } else if (c.type === 'album' || c.type === 'artist') {
-    items = [...queueItems, { label: 'Add to playlist', icon: 'list-plus', sub: () => addToPlaylistItems(ids()) }, '-',
+    items = [...queueItems, { label: 'Add to playlist', icon: 'list-plus', sub: () => addToPlaylistItems(ids()) }, libraryItem(c), '-',
       { label: c.type === 'album' ? 'Edit album' : `Edit all songs by this artist`, icon: 'pencil', run: () => bulkEdit(ids()) }];
     if (c.type === 'album') {
       const a = store.albums().get(c.id);
@@ -98,9 +98,19 @@ export function ctxMenu(c, at) {
         if (await confirmDialog('Delete folder?', `"${f.name}" will be deleted. Its playlists are kept.`)) { await store.deleteFolder(f.id); if (location.hash === `#/folder/${f.id}`) go('#/'); }
       } },
     ];
-  } else items = [...queueItems, { label: 'Add to playlist', icon: 'list-plus', sub: () => addToPlaylistItems(ids()) }];
+  } else items = [...queueItems, { label: 'Add to playlist', icon: 'list-plus', sub: () => addToPlaylistItems(ids()) }, ...(c.type === 'liked' || c.type === 'songs' ? [libraryItem(c)] : [])];
   const info = itemInfo(c);
   openMenu(items, at, info && { title: info.name, sub: info.sub, cover: coverHtml(info.covers, { liked: info.liked, icon: info.icon, cls: 'sm' }) });
+}
+
+/** "Remove from Your Library" (hides it from the list; nothing is deleted) / "Add to Your Library". */
+function libraryItem(c) {
+  const hidden = store.isHiddenInLibrary(c);
+  if (hidden) return { label: 'Add to Your Library', icon: 'circle-plus', run: () => { store.setHiddenInLibrary(c, false); toast('Added to Your Library'); } };
+  return { label: 'Remove from Your Library', icon: 'circle-minus', run: () => {
+    store.setHiddenInLibrary(c, true);
+    toast('Removed from Your Library', { label: 'Undo', run: () => store.setHiddenInLibrary(c, false) });
+  } };
 }
 
 /** Play a whole context (big play buttons), or pause/resume if it is already playing. */
