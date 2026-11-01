@@ -35,7 +35,8 @@ self.addEventListener('fetch', (e) => {
   }
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
-    if (e.request.mode === 'navigate') return (await cache.match('./')) || fetch(e.request);
+    // Pages: the privacy/terms pages if asked for, otherwise the app.
+    if (e.request.mode === 'navigate') return (await cache.match(e.request, { ignoreSearch: true })) || (await cache.match('./')) || fetch(e.request);
     return (await cache.match(e.request, { ignoreSearch: true })) || fetch(e.request);
   })());
 });

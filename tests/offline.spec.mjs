@@ -77,3 +77,15 @@ test('a new version switches over by itself when nothing is playing', async ({ p
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('privacy policy and terms pages are reachable (also once the app is installed)', async ({ page }) => {
+  await openApp(page);
+  await waitForServiceWorker(page);
+  await page.goto('/privacy.html');
+  await expect(page.locator('h1')).toHaveText('Privacy policy');
+  await expect(page.locator('body')).toContainText('drive.file');
+  await page.goto('/terms.html');
+  await expect(page.locator('h1')).toHaveText('Terms of service');
+  await page.goto('/');
+  await page.waitForSelector('html[data-ready="1"]', { state: 'attached' });
+});

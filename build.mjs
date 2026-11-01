@@ -18,6 +18,7 @@ const fontDir = 'node_modules/@fontsource-variable/figtree/files';
 for (const f of ['figtree-latin-wght-normal.woff2', 'figtree-latin-ext-wght-normal.woff2']) cpSync(join(fontDir, f), join(out, 'fonts', f));
 cpSync('src/icons', join(out, 'icons'), { recursive: true });
 cpSync('src/index.html', join(out, 'index.html'));
+for (const f of ['privacy.html', 'terms.html']) cpSync(join('src', f), join(out, f));
 cpSync('src/manifest.webmanifest', join(out, 'manifest.webmanifest'));
 
 // Everything in dist/ is precached by the service worker; the version changes whenever any file changes.
