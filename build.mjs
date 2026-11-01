@@ -8,7 +8,9 @@ const out = 'dist';
 rmSync(out, { recursive: true, force: true });
 mkdirSync(join(out, 'fonts'), { recursive: true });
 
-const common = { bundle: true, minify: true, format: 'esm', target: 'es2022', legalComments: 'none', loader: { '.svg': 'text' } };
+// Google sign-in client ID for Drive sync (set LARK_GOOGLE_CLIENT_ID in Render → Environment).
+const define = { __GOOGLE_CLIENT_ID__: JSON.stringify((process.env.LARK_GOOGLE_CLIENT_ID || '').trim()) };
+const common = { bundle: true, minify: true, format: 'esm', target: 'es2022', legalComments: 'none', loader: { '.svg': 'text' }, define };
 await esbuild.build({ ...common, entryPoints: { app: 'src/js/main.js', 'import-worker': 'src/js/import-worker.js' }, outdir: out });
 await esbuild.build({ ...common, entryPoints: ['src/styles.css'], outfile: join(out, 'styles.css'), external: ['fonts/*'] });
 
@@ -32,7 +34,7 @@ const version = hash.digest('hex').slice(0, 12);
 const assets = ['./', ...files.filter((f) => f !== 'index.html').map((f) => './' + f)];
 await esbuild.build({
   ...common, entryPoints: ['src/sw.js'], outfile: join(out, 'sw.js'),
-  define: { __VERSION__: JSON.stringify(version), __ASSETS__: JSON.stringify(assets) },
+  define: { ...define, __VERSION__: JSON.stringify(version), __ASSETS__: JSON.stringify(assets) },
 });
 console.log(`built ${files.length + 1} files, version ${version}`);
 

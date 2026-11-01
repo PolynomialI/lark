@@ -20,6 +20,7 @@ More in [docs/screenshots](docs/screenshots).
 - **Editing**: song title, artist, album, cover (paste an image with Ctrl+V or "Paste image", upload and crop, or reuse another cover) and lyrics; bulk edit of several songs; playlist name, description and cover (default: a 4-cover mosaic). Your original files are never changed.
 - **Playback**: shuffle (every song once before repeats), repeat off/all/one, queue ("Next in queue" before "Next from: …"; play next, add, reorder, remove, clear), previous restarts the song after 3 s, volume up to 150% (boosted above 100%, with a limiter), crossfade 0–12 s, near-gapless playback, volume normalisation (ReplayGain tags, otherwise measured), a 6-band equaliser with presets, a sleep timer (minutes or end of song), and synced lyrics. Lark remembers the song, position and queue after closing.
 - **Controls**: lock screen, notification, Bluetooth/headphone buttons and keyboard media keys (Media Session), plus keyboard shortcuts on computers (listed in Settings).
+- **Sync with Google Drive**: use Lark on the computer and the phone with the same library; see below.
 - **Export / import**: one `.zip` with everything (songs as-is, covers, edits, playlists, likes, history, settings). It is written as a stream, so it needs no extra memory or disk space, and it supports libraries over 4 GB (ZIP64). Import replaces or merges.
 
 ## Install on your Samsung phone
@@ -38,6 +39,53 @@ On a computer, open the address in Chrome or Edge and click the install icon in 
 3. On the new device: **Settings → Import library**, pick the file, then choose:
    - **Merge**: adds songs, playlists, likes and history. Songs you already have (same file content) are not duplicated.
    - **Replace**: makes the library exactly like the export.
+
+## Sync with Google Drive (computer ⇄ phone)
+
+Lark can keep your library the same on all your devices through your own Google Drive. It puts your songs, covers, edits, playlists, folders, likes, history and Your Library choices in a folder called **Lark**. Each device picks up the changes and keeps its own copy of the songs, so music still plays offline. Lark uses Google's `drive.file` permission, so it can only see the files it creates; nothing else in your Drive.
+
+### One-time setup (about 10 minutes, on a computer)
+
+Google needs to know that Lark is allowed to ask for your Drive. You do this once, in Google's developer console. It's free, and no credit card is needed.
+
+1. Open https://console.cloud.google.com and sign in with **the Google account whose Drive should hold your music**. If it asks you to accept terms of service, accept them.
+2. **Create a project:** click the project picker at the top left (it may say "Select a project"), then **New project**. Name it `Lark` and click **Create**. When it's done, make sure **Lark** is the selected project in the picker.
+3. **Turn on the Drive API:** open https://console.cloud.google.com/apis/library/drive.googleapis.com and click **Enable**.
+4. **Describe the app:** open https://console.cloud.google.com/auth/overview and click **Get started**.
+   - App name: `Lark`. User support email: your email. Click **Next**.
+   - Audience: **External**. Click **Next**.
+   - Contact information: your email. Click **Next**.
+   - Tick "I agree to the Google API Services: User Data Policy", then click **Continue** and **Create**.
+5. **Choose the permission:** open https://console.cloud.google.com/auth/scopes and click **Add or remove scopes**. In the filter box type `drive.file`, tick the row `.../auth/drive.file` ("See, edit, create, and delete only the specific Google Drive files you use with this app"), click **Update**, then **Save** at the bottom.
+6. **Publish it** so the sign-in doesn't expire every week: open https://console.cloud.google.com/auth/audience, click **Publish app** under "Publishing status", then **Confirm**. This permission doesn't need a review by Google.
+   (If you'd rather leave it in "Testing", add your Gmail address under **Test users** instead. Google then asks you to approve Lark again every 7 days.)
+7. **Create the sign-in ID:** open https://console.cloud.google.com/auth/clients and click **Create client**.
+   - Application type: **Web application**. Name: `Lark`.
+   - Under **Authorized JavaScript origins**, click **Add URI** and enter exactly `https://lark-music.onrender.com` (no slash at the end).
+   - Leave "Authorized redirect URIs" empty and click **Create**.
+   - Copy the **Client ID**. It looks like `1234567890-abc123def456.apps.googleusercontent.com`. You don't need the client secret.
+8. **Give Lark the ID** in one of two ways:
+   - Paste the Client ID to Claude (it's not a password), and it will be added to the Render site.
+   - Or add it yourself: in the [Render dashboard](https://dashboard.render.com) open **lark-music**, then **Environment**, then **Add Environment Variable**. Key: `LARK_GOOGLE_CLIENT_ID`. Value: the Client ID. Choose **Save, rebuild, and deploy**.
+9. After the deploy (about a minute), close every Lark window and open Lark again. It updates itself.
+
+### Connect your devices
+
+1. **On the computer** (the one that has your music): open **Settings → Sync with Google Drive → Connect Google Drive**, choose your Google account and click **Allow**.
+   - If Google shows "Google hasn't verified this app", click **Advanced → Go to Lark (unsafe)**. It's your own app.
+   - If Google shows a tick box for Drive access, tick it.
+   - Lark then uploads your library. Keep Lark open until Settings says **Up to date**; a progress bar shows how far it is. Your Google Drive now has a **Lark** folder.
+2. **On the phone:** open Lark, go to **Settings → Sync with Google Drive → Connect Google Drive**, and sign in with **the same Google account**. Connect on **Wi-Fi** and keep Lark open while the songs download. New songs appear straight away; songs still downloading look faded, with a small cloud icon.
+
+### Everyday use
+
+- Lark syncs by itself while it's open: a few seconds after any change, every few minutes, and whenever you come back to it. When you open Lark on the other device, it picks up the changes.
+- **One tap after a while:** Google only allows browser apps a one-hour sign-in. When it has run out, Lark shows **Sync with Google Drive → Sync** at the bottom (and the cloud button turns orange). Tap it; a Google window flashes and closes by itself, and syncing continues.
+- **On mobile data**, new songs wait for Wi-Fi. Settings shows how many are waiting, with a **Transfer them now** link.
+- **Deleting a song deletes it on every device.** Lark also moves its file to the bin in Google Drive, which Google empties after 30 days.
+- Don't rename, move or edit the files inside the **Lark** folder in Google Drive yourself.
+- Free Google Drive has 15 GB, shared with Gmail and Google Photos. Check it at https://drive.google.com (bottom left).
+- To stop syncing a device: **Settings → Sync with Google Drive → Disconnect**. Your music stays on that device and in Drive.
 
 ## Deploy (Render, free static site)
 
@@ -83,6 +131,7 @@ What the tests check:
 | `zip64.spec.mjs` | A zip over 4 GB is written as ZIP64 by client-zip and read back by Lark's importer |
 | `offline.spec.mjs` | Works with the network off after the first visit; passes Chrome's installability checks; an app update keeps the library and switches over by itself |
 | `playback.spec.mjs` (panel) | The desktop "Now playing view" panel follows the current song and switches with the queue |
+| `sync.spec.mjs` | Two devices sync through a stand-in for Google Drive: everything copies over (including audio for offline play), renames/likes/deletions go both ways, changes on both devices at once are both kept, the one-tap sign-in prompt, and waiting for Wi-Fi on mobile data |
 | `phone.spec.mjs` | Phone layout: tabs, mini-player swipe to skip, swipe up/down for the full player, bottom-sheet menus, Back closes sheets |
 
 ## How it's built

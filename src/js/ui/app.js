@@ -8,6 +8,7 @@ import { acts, go, openDialog, overlayOpen, parseCtx, toast } from './common.js'
 import { ic } from './icons.js';
 import { libraryHtml } from './library.js';
 import { bindMini, bindRight, playerBarHtml, refreshAll, refreshPanels, rightPanelHtml } from './nowplaying.js';
+import { refreshSyncUI } from './sync.js';
 import { views } from './views.js';
 
 const AUDIO_ACCEPT = 'audio/*,.mp3,.m4a,.aac,.flac,.ogg,.oga,.opus,.wav,.webm,.lrc';
@@ -19,7 +20,7 @@ export function initUI() {
       <div class="panel side-lib" id="side-lib"></div>
     </aside>
     <main class="panel main" id="main">
-      <div class="topbar"><button class="circle" data-act="back" aria-label="Go back">${ic('chevron-left')}</button><button class="circle fwd" data-act="fwd" aria-label="Go forward">${ic('chevron-right')}</button><span class="topbar-title"></span><span class="spacer"></span><a class="circle" href="#/settings" aria-label="Settings" title="Settings">${ic('settings')}</a></div>
+      <div class="topbar"><button class="circle" data-act="back" aria-label="Go back">${ic('chevron-left')}</button><button class="circle fwd" data-act="fwd" aria-label="Go forward">${ic('chevron-right')}</button><span class="topbar-title"></span><span class="spacer"></span><button class="circle sync-btn" data-act="sync-now" data-bind="sync-btn" hidden></button><a class="circle" href="#/settings" aria-label="Settings" title="Settings">${ic('settings')}</a></div>
       <div id="view"></div>
     </main>
     ${rightPanelHtml()}
@@ -65,6 +66,7 @@ function render(keepScroll = false) {
   el.dataset.view = r.name;
   current = { r, view };
   view.mount?.(el);
+  refreshSyncUI();
   sc.scrollTop = top;
   sc.classList.toggle('scrolled', sc.scrollTop > (isMobile() ? 200 : 120));
   lastRender = Date.now();

@@ -13,7 +13,7 @@ export async function analyzePending() {
   try {
     for (;;) {
       if (!lib.settings.normalize) break;
-      const s = [...lib.songs.values()].find((x) => x.rg == null && x.loud == null && !failed.has(x.id));
+      const s = [...lib.songs.values()].find((x) => x.rg == null && x.loud == null && !failed.has(x.id) && lib.files.has(x.file));
       if (!s) break;
       try { await updateSongs([s.id], { loud: await measure(s) }, { silent: true }); } catch { failed.add(s.id); }
       await sleep(30);

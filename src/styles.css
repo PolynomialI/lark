@@ -158,7 +158,14 @@ textarea.input { resize: vertical; min-height: 60px; }
 .home { --c: #3a3a3a; padding: 72px 24px 32px; background: linear-gradient(color-mix(in srgb, var(--c) 45%, #121212), #121212 320px); min-height: 100%; }
 .home-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .home-top h1 { font-size: 30px; font-weight: 800; }
-.home-top .settings-link { display: none; }
+.home-top .settings-link, .home-top .sync-btn { display: none; }
+.home-btns { display: flex; align-items: center; gap: 4px; }
+.sync-btn.attention { color: var(--accent) !important; }
+.ic.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.tr.pending { opacity: .5; }
+.pending-ic { width: 13px; height: 13px; margin-right: 4px; vertical-align: -2px; }
+.sync-msg { margin-top: 4px; }
 .shortcuts { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; margin-bottom: 8px; }
 .shortcut { display: flex; align-items: center; gap: 12px; background: #ffffff14; border-radius: 4px; overflow: hidden; height: 64px; font-weight: 700; position: relative; padding-right: 56px; transition: background .2s; text-decoration: none !important; }
 .shortcut:hover { background: #ffffff29; }
@@ -502,8 +509,8 @@ body:not(.has-song) .pb-left .like, body:not(.has-song) .pb-art { visibility: hi
   .list-title { padding: 16px 16px 4px; }
   .home { padding: 20px 16px 24px; }
   .home-top h1 { font-size: 24px; }
-  .home-top .settings-link { display: inline-grid; color: var(--text); }
-  .home-top .settings-link .ic { width: 24px; height: 24px; }
+  .home-top .settings-link, .home-top .sync-btn:not([hidden]) { display: inline-grid; color: var(--text); }
+  .home-top .settings-link .ic, .home-top .sync-btn .ic { width: 24px; height: 24px; }
   .shortcuts { grid-template-columns: 1fr 1fr; gap: 8px; }
   .shortcut { height: 56px; padding-right: 8px; gap: 8px; }
   .shortcut .cover { width: 56px; height: 56px; }
@@ -526,7 +533,7 @@ body:not(.has-song) .pb-left .like, body:not(.has-song) .pb-art { visibility: hi
   .lib-page .li-t { font-size: 16px; }
   .search-top { grid-template-columns: 1fr; gap: 16px; }
   .top-card .card-t { font-size: 22px; }
-  .settings { padding: 16px 16px 40px; }
+  .settings { padding: 60px 16px 40px; }
   .set-row { flex-wrap: wrap; }
   .slider-val { width: 100%; }
   .lyr-page { padding: 24px 20px 48px; min-height: calc(100dvh - 130px); }

@@ -117,6 +117,7 @@ P.player.on('time', updateTime);
 P.player.on('queue', () => { updateModes(); refreshPanels(); });
 P.player.on('sleep', updateSleep);
 P.player.on('error', (s) => toast(`Can't play "${store.title(s)}"`));
+P.player.on('unavailable', (s) => toast(`"${store.title(s)}" is still downloading from Google Drive`));
 engine.on('volume', updateVolume);
 store.events.on('change', (w) => { if (w === 'likes') updateLike(); if (w === 'songs' || w === 'all') { updateTrack(); refreshPanels(); } });
 setInterval(() => P.sleep?.until && updateSleep(), 30000);

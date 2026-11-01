@@ -8,7 +8,7 @@ import { lib } from './store.js';
 export function libraryJson() {
   return {
     format: 'lark-library', version: 1, exportedAt: new Date().toISOString(),
-    songs: [...lib.songs.values()],
+    songs: [...lib.songs.values()].filter((s) => lib.files.has(s.file)),
     covers: [...lib.covers.values()].map((c) => ({ id: c.id, color: c.color || null })),
     playlists: [...lib.playlists.values()],
     folders: [...lib.folders.values()],
@@ -23,7 +23,7 @@ export async function exportLibrary(onProgress = () => {}) {
   if (!navigator.serviceWorker?.controller || !reg) throw new Error('Export needs the offline service to be running. Reload the app and try again.');
   const json = new Blob([JSON.stringify(libraryJson())], { type: 'application/json' });
   const now = new Date();
-  const covers = [...lib.covers.values()], songs = [...lib.songs.values()];
+  const covers = [...lib.covers.values()], songs = [...lib.songs.values()].filter((s) => lib.files.has(s.file)); // skip songs still downloading
   const files = [
     { name: 'library.json', size: json.size },
     ...covers.map((c) => ({ name: `covers/${c.id}.jpg`, size: c.blob.size })),

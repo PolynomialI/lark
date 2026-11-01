@@ -13,7 +13,7 @@ const scroller = () => $('#main');
 export function repaintLists() { for (const l of mounted) l.root.isConnected ? l.paint(true) : mounted.delete(l); }
 player.player.on('track', repaintLists);
 player.player.on('state', repaintLists);
-store.events.on('change', (w) => w === 'likes' && repaintLists());
+store.events.on('change', (w) => (w === 'likes' || w === 'files') && repaintLists());
 
 export class TrackList {
   /** o: { ids, ctx, dates?: Map, dateLabel?, trackNumbers?, showAlbum = true, reorderable?, onReorder?(ids, to), playlistId? } */
@@ -57,10 +57,11 @@ export class TrackList {
     const liked = store.isLiked(id);
     const num = this.o.trackNumbers ? s.track || '–' : i + 1;
     const artist = esc(store.artistOf(s));
-    return `<div class="tr${this.sel.has(id) ? ' sel' : ''}${cur ? ' cur' : ''}" data-i="${i}" style="top:${i * RH}px">
+    const pending = !store.isAvailable(s);
+    return `<div class="tr${this.sel.has(id) ? ' sel' : ''}${cur ? ' cur' : ''}${pending ? ' pending' : ''}" data-i="${i}" style="top:${i * RH}px"${pending ? ' title="Downloading from Google Drive"' : ''}>
       <div class="c-num">${playing ? '<span class="eq-anim"><i></i><i></i><i></i></span>' : `<span class="n">${num}</span>`}<button class="row-play" data-playrow aria-label="${playing ? 'Pause' : 'Play'}">${ic(playing ? 'pause' : 'play')}</button></div>
       <div class="c-title">${s.coverId ? `<img class="thumb" src="${store.coverUrl(s.coverId)}" alt="" decoding="async">` : `<div class="thumb empty">${ic('music')}</div>`}
-        <div class="tt"><div class="t">${esc(store.title(s))}</div><div class="s">${liked && mobile ? ic('heart', 'mini-like') : ''}${mobile ? artist : `<a href="#/artist/${encodeURIComponent(store.artistKey(s.artist))}">${artist}</a>`}</div></div></div>
+        <div class="tt"><div class="t">${esc(store.title(s))}</div><div class="s">${pending ? ic('cloud-download', 'pending-ic') : ''}${liked && mobile ? ic('heart', 'mini-like') : ''}${mobile ? artist : `<a href="#/artist/${encodeURIComponent(store.artistKey(s.artist))}">${artist}</a>`}</div></div></div>
       ${this.o.showAlbum ? `<div class="c-album">${s.album ? `<a href="#/album/${encodeURIComponent(store.albumKey(s))}">${esc(s.album)}</a>` : ''}</div>` : ''}
       ${this.o.dates ? `<div class="c-date">${fmtDate(this.o.dates.get(id))}</div>` : ''}
       <div class="c-end"><button class="like${liked ? ' on' : ''}" data-like aria-label="${liked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}">${ic('heart')}</button><span class="dur">${fmtTime(s.duration)}</span><button class="more" data-more aria-label="More options">${ic('ellipsis')}</button>${this.o.reorderable ? `<span class="grip" data-grip aria-label="Drag to reorder">${ic('grip-vertical')}</span>` : ''}</div>

@@ -12,16 +12,20 @@ export const DEFAULT_SETTINGS = {
 export const lib = {
   songs: new Map(), covers: new Map(), playlists: new Map(), folders: new Map(),
   likes: new Map(), history: [], settings: structuredClone(DEFAULT_SETTINGS),
+  tomb: { songs: {}, playlists: {}, folders: {}, likes: {} }, // deletions (for sync)
+  files: new Set(), // audio files present on this device
 };
 export const events = new Emitter();
 let derived = null;
 const changed = (what) => { if (what === 'songs') derived = null; events.emit('change', what); };
 
 export async function load() {
-  const [songs, covers, playlists, folders, likes, history, settings] = await Promise.all([
+  const [songs, covers, playlists, folders, likes, history, settings, tomb, files] = await Promise.all([
     db.getAll('songs'), db.getAll('covers'), db.getAll('playlists'), db.getAll('folders'),
-    db.getAll('likes'), db.getAll('history'), db.kvGet('settings'),
+    db.getAll('likes'), db.getAll('history'), db.kvGet('settings'), db.kvGet('tombstones'), opfs.listNames().catch(() => []),
   ]);
+  lib.tomb = { songs: {}, playlists: {}, folders: {}, likes: {}, ...(tomb || {}) };
+  lib.files = new Set(files);
   for (const k of Object.keys(lib)) if (lib[k] instanceof Map) lib[k].clear();
   songs.forEach((s) => lib.songs.set(s.id, s));
   covers.forEach((c) => lib.covers.set(c.id, c));
@@ -33,6 +37,16 @@ export async function load() {
   derived = null;
   events.emit('change', 'all');
 }
+
+// ---------- deletions & audio availability (used by sync) ----------
+async function addTomb(kind, ids) {
+  const now = Date.now();
+  ids.forEach((id) => { lib.tomb[kind][id] = now; });
+  await db.kvSet('tombstones', lib.tomb);
+}
+/** Whether this song's audio is on this device (it may still be downloading from Google Drive). */
+export const isAvailable = (s) => !!s && lib.files.has(s.file);
+export function markAvailable(file) { lib.files.add(file); events.emit('change', 'files'); }
 
 // ---------- display helpers ----------
 export const title = (s) => s?.title || s?.name || 'Unknown';
@@ -86,13 +100,14 @@ export function playlistCovers(p) { return p.coverId ? [p.coverId] : mosaic(p.so
 // ---------- songs ----------
 export async function addSongs(songs) {
   const fresh = songs.filter((s) => !lib.songs.has(s.id));
-  fresh.forEach((s) => lib.songs.set(s.id, s));
+  fresh.forEach((s) => { s.updatedAt ||= s.addedAt; lib.songs.set(s.id, s); lib.files.add(s.file); });
   if (fresh.length) { await db.put('songs', ...fresh); changed('songs'); }
   return fresh.length;
 }
 export async function updateSongs(ids, patch, { silent = false } = {}) {
   const list = ids.map((id) => lib.songs.get(id)).filter(Boolean);
-  for (const s of list) Object.assign(s, typeof patch === 'function' ? patch(s) : patch);
+  const now = Date.now();
+  for (const s of list) { Object.assign(s, typeof patch === 'function' ? patch(s) : patch); if (!silent) s.updatedAt = now; }
   await db.put('songs', ...list);
   if (!silent) changed('songs');
 }
@@ -101,7 +116,9 @@ export async function deleteSongs(ids) {
   const files = ids.map((id) => lib.songs.get(id)?.file).filter(Boolean);
   ids.forEach((id) => { lib.songs.delete(id); lib.likes.delete(id); });
   const pls = [...lib.playlists.values()].filter((p) => p.songs.some((e) => set.has(e.songId)));
-  pls.forEach((p) => { p.songs = p.songs.filter((e) => !set.has(e.songId)); });
+  pls.forEach((p) => { p.songs = p.songs.filter((e) => !set.has(e.songId)); p.updatedAt = Date.now(); });
+  files.forEach((f) => lib.files.delete(f));
+  await addTomb('songs', ids);
   await db.del('songs', ...ids);
   await db.del('likes', ...ids);
   if (pls.length) await db.put('playlists', ...pls);
@@ -121,6 +138,7 @@ export async function setLiked(ids, liked) {
     await db.put('likes', ...add.map((id) => ({ songId: id, at: lib.likes.get(id) })));
   } else {
     ids.forEach((id) => lib.likes.delete(id));
+    await addTomb('likes', ids);
     await db.del('likes', ...ids);
   }
   changed('likes');
@@ -145,6 +163,7 @@ export async function updatePlaylist(id, patch) {
 }
 export async function deletePlaylist(id) {
   lib.playlists.delete(id);
+  await addTomb('playlists', [id]);
   await db.del('playlists', id);
   changed('playlists');
 }
@@ -179,7 +198,7 @@ export async function reorderPlaylist(id, songIds, to) {
   await savePl(p);
 }
 export async function createFolder(name) {
-  const f = { id: uid(), name: name || 'New Folder', createdAt: Date.now() };
+  const f = { id: uid(), name: name || 'New Folder', createdAt: Date.now(), updatedAt: Date.now() };
   lib.folders.set(f.id, f);
   await db.put('folders', f);
   changed('playlists');
@@ -188,14 +207,16 @@ export async function createFolder(name) {
 export async function renameFolder(id, name) {
   const f = lib.folders.get(id);
   f.name = name;
+  f.updatedAt = Date.now();
   await db.put('folders', f);
   changed('playlists');
 }
 export async function deleteFolder(id) {
   const pls = [...lib.playlists.values()].filter((p) => p.folderId === id);
-  pls.forEach((p) => { p.folderId = null; });
+  pls.forEach((p) => { p.folderId = null; p.updatedAt = Date.now(); });
   if (pls.length) await db.put('playlists', ...pls);
   lib.folders.delete(id);
+  await addTomb('folders', [id]);
   await db.del('folders', id);
   changed('playlists');
 }
@@ -255,7 +276,7 @@ export const isHiddenInLibrary = (c) => (lib.settings.libHidden || []).includes(
 export function setHiddenInLibrary(c, hidden) {
   const set = new Set(lib.settings.libHidden || []);
   if (hidden) set.add(libItemKey(c)); else set.delete(libItemKey(c));
-  return setSettings({ libHidden: [...set] });
+  return setSettings({ libHidden: [...set], libHiddenAt: Date.now() });
 }
 
 export async function setSettings(patch) {
@@ -338,6 +359,18 @@ export async function collectGarbage() {
   unused.forEach((id) => { lib.covers.delete(id); const u = coverUrls.get(id); if (u) URL.revokeObjectURL(u); coverUrls.delete(id); });
   if (unused.length) await db.del('covers', ...unused);
 }
+/** Replace the library with a merged copy from sync (songs' details, playlists, folders, likes, history). */
+export async function replaceLibrary(s) {
+  const now = new Set(s.songs.map((x) => x.id));
+  const gone = [...lib.songs.values()].filter((x) => !now.has(x.id));
+  await db.replace({ songs: s.songs, playlists: s.playlists, folders: s.folders, likes: s.likes, history: s.history.map(({ songId, at, ctx }) => ({ songId, at, ctx })) });
+  await db.kvSet('tombstones', s.tomb);
+  await db.kvSet('settings', { ...lib.settings, libHidden: s.hidden.list, libHiddenAt: s.hidden.at });
+  for (const x of gone) await opfs.remove(x.file);
+  await load();
+  if (gone.length) events.emit('deleted', gone.map((x) => x.id));
+}
+
 export async function wipeAll() {
   await db.clear(...db.STORES);
   await opfs.clearAll();

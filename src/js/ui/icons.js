@@ -52,7 +52,19 @@ import circlePlus from 'lucide-static/icons/circle-plus.svg';
 import circleMinus from 'lucide-static/icons/circle-minus.svg';
 import circleCheck from 'lucide-static/icons/circle-check.svg';
 import clipboardPaste from 'lucide-static/icons/clipboard-paste.svg';
+import cloud from 'lucide-static/icons/cloud.svg';
+import cloudCheck from 'lucide-static/icons/cloud-check.svg';
+import cloudAlert from 'lucide-static/icons/cloud-alert.svg';
+import cloudOff from 'lucide-static/icons/cloud-off.svg';
+import refreshCw from 'lucide-static/icons/refresh-cw.svg';
+import cloudDownload from 'lucide-static/icons/cloud-download.svg';
 const SVG = {
+  'cloud': cloud,
+  'cloud-check': cloudCheck,
+  'cloud-alert': cloudAlert,
+  'cloud-off': cloudOff,
+  'refresh-cw': refreshCw,
+  'cloud-download': cloudDownload,
   'square-play': squarePlay,
   'panel-right-close': panelRightClose,
   'circle-plus': circlePlus,

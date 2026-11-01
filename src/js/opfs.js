@@ -16,6 +16,11 @@ export async function writeBlob(name, blob, onBytes) {
   const counter = new TransformStream({ transform(chunk, c) { onBytes(chunk.byteLength); c.enqueue(chunk); } });
   return blob.stream().pipeThrough(counter).pipeTo(w);
 }
+/** Write a stream into OPFS (the file only appears once it is complete). */
+export async function writeStream(name, stream) {
+  const fh = await (await audioDir()).getFileHandle(name, { create: true });
+  await stream.pipeTo(await fh.createWritable());
+}
 export async function remove(name) {
   try { await (await audioDir()).removeEntry(name); } catch {}
 }

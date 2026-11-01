@@ -8,7 +8,7 @@ import { Emitter } from './util.js';
 
 export const engine = new Engine();
 export const queue = new Queue();
-export const player = new Emitter(); // 'track' | 'state' | 'time' | 'queue' | 'sleep' | 'error'
+export const player = new Emitter(); // 'track' | 'state' | 'time' | 'queue' | 'sleep' | 'error' | 'unavailable'
 export let sleep = null;             // { until } | { end: true } | null
 let sleepTimer = 0, saveTimer = 0, lastSave = 0, lastPos = 0;
 const songOf = (id) => store.lib.songs.get(id);
@@ -22,6 +22,7 @@ export async function playContext(ctx, ids, index = 0) {
 async function startCurrent(autoplay = true) {
   const s = songOf(queue.songId);
   if (!s) return;
+  if (!store.isAvailable(s)) { engine.pause(); player.emit('unavailable', s); return; }
   await engine.load(s, { autoplay });
   afterTrackChange(autoplay);
 }
@@ -36,12 +37,12 @@ function afterTrackChange(log) {
 }
 /** Tell the engine what follows the current song (call after any queue change). */
 export function refreshNext() {
-  const id = queue.peekNext(true);
-  engine.preload(id ? songOf(id) : null);
+  const s = songOf(queue.peekNext(true));
+  engine.preload(store.isAvailable(s) ? s : null);
 }
 async function stopAtStart() {
   const s = songOf(queue.songId);
-  if (s) await engine.load(s, { autoplay: false });
+  if (store.isAvailable(s)) await engine.load(s, { autoplay: false });
   afterTrackChange(false);
 }
 
@@ -146,7 +147,7 @@ export async function restore() {
   queue.restore(st.queue);
   queue.prune((id) => store.lib.songs.has(id));
   const s = songOf(queue.songId);
-  if (!s) return;
+  if (!store.isAvailable(s)) return;
   await engine.load(s, { autoplay: false, at: st.t || 0 });
   refreshNext();
   updateMediaSession();

@@ -54,5 +54,13 @@ export async function clear(...stores) {
   for (const s of stores) tx.objectStore(s).clear();
   return done(tx);
 }
+/** Replace the whole contents of some stores in one transaction: { store: [records] }. */
+export async function replace(data) {
+  const db = await openDB();
+  const names = Object.keys(data);
+  const tx = db.transaction(names, 'readwrite');
+  for (const n of names) { const os = tx.objectStore(n); os.clear(); for (const v of data[n]) os.put(v); }
+  return done(tx);
+}
 export async function kvGet(key) { return (await get('kv', key))?.value; }
 export async function kvSet(key, value) { return put('kv', { key, value }); }

@@ -12,6 +12,7 @@ import { acts, cardHtml, colorOf, coverHtml, ctxAttr, itemInfo, openDialog, open
 import { editPlaylist } from './dialogs.js';
 import { ic } from './icons.js';
 import { libraryHtml } from './library.js';
+import { syncSectionHtml } from './sync.js';
 import { mountLyrics } from './nowplaying.js';
 import { TrackList } from './tracklist.js';
 import { analyzePending } from '../loudness.js';
@@ -20,7 +21,7 @@ const L = store.lib;
 const viewState = new Map(); // per page: { sort, dir, filter }
 const totalTime = (ids) => ids.reduce((a, id) => a + (L.songs.get(id)?.duration || 0), 0);
 const songCount = (n) => `${n} ${n === 1 ? 'song' : 'songs'}`;
-const settingsBtn = () => `<a class="icon-btn settings-link" href="#/settings" aria-label="Settings" title="Settings">${ic('settings')}</a>`;
+const settingsBtn = () => `<span class="home-btns"><button class="icon-btn sync-btn" data-act="sync-now" data-bind="sync-btn" hidden></button><a class="icon-btn settings-link" href="#/settings" aria-label="Settings" title="Settings">${ic('settings')}</a></span>`;
 
 function pageHead({ kind, title, desc = '', meta = '', cover, color, editAct = '' }) {
   return `<header class="ph" style="--c:${color}">
@@ -258,6 +259,7 @@ export const views = {
     return {
       deps: [],
       html: `<div class="settings"><h1>Settings</h1>
+        <section><h2>Sync with Google Drive</h2><div id="sync-box">${syncSectionHtml()}</div></section>
         <section><h2>Library</h2>
           <div class="set-row"><div><b>Add music</b><p>MP3, M4A/AAC, FLAC, OGG, Opus, WAV. Matching .lrc files add synced lyrics.</p></div>
             <div class="set-btns"><button class="btn" data-act="add-files">Add files</button><button class="btn" data-act="add-folder">Add folder</button></div></div>
