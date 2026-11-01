@@ -214,5 +214,5 @@ export function applySettings() {
   engine.volume = st.volume;
   engine.muted = st.muted;
   engine.setVolume(st.volume);
-  return engine.setOptions({ crossfade: st.crossfade, normalize: st.normalize, eq: st.eq });
+  return engine.setOptions({ crossfade: st.crossfade, normalize: st.normalize, normLevel: st.normLevel, eq: st.eq });
 }

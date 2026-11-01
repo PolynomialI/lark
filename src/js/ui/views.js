@@ -274,8 +274,10 @@ export const views = {
             <div class="slider-val"><input type="range" class="range" data-bind="vol" min="0" max="150" value="${Math.round(vol * 100)}" style="--p:${(vol / MAX_VOLUME) * 100}%" aria-label="Volume"><output data-bind="vol-pct">${Math.round(vol * 100)}%</output></div></div>
           <div class="set-row"><div><b>Crossfade</b><p>Fade songs into each other. At 0 s songs play back to back (gapless).</p></div>
             <div class="slider-val"><input type="range" class="range" id="set-xfade" min="0" max="12" step="1" value="${st.crossfade}" style="--p:${(st.crossfade / 12) * 100}%"><output>${st.crossfade} s</output></div></div>
-          <div class="set-row"><div><b>Normalise volume</b><p>Play all songs at a similar loudness (uses ReplayGain tags, or measures each song).</p></div>
+          <div class="set-row"><div><b>Normalise volume</b><p>Play all songs at the same loudness, like Spotify's "Normalize volume". Lark reads ReplayGain tags or measures each song once.</p></div>
             <label class="switch"><input type="checkbox" id="set-norm"${st.normalize ? ' checked' : ''}><span></span></label></div>
+          <div class="set-row norm-level${st.normalize ? '' : ' off'}"><div><b>Volume level</b><p>The same levels as Spotify: Loud (-11 LUFS, with a limiter), Normal (-14 LUFS) and Quiet (-19 LUFS). Pick the one you use in Spotify to sound the same.</p></div>
+            <select class="input" id="set-norm-level" aria-label="Volume level">${['loud', 'normal', 'quiet'].map((k) => `<option value="${k}"${(st.normLevel || 'normal') === k ? ' selected' : ''}>${k[0].toUpperCase() + k.slice(1)}</option>`).join('')}</select></div>
           <div class="set-row"><div><b>Equaliser</b><p>Shape the sound with a preset or your own settings.</p></div>
             <label class="switch"><input type="checkbox" id="set-eq"${st.eq.enabled ? ' checked' : ''}><span></span></label></div>
           <div class="eq${st.eq.enabled ? '' : ' off'}"><select class="input" id="set-preset" aria-label="Equaliser preset">${presetOpts}</select><div class="eq-bands">${bands}</div></div>
@@ -291,7 +293,8 @@ export const views = {
         const xf = root.querySelector('#set-xfade');
         xf.oninput = () => { xf.nextElementSibling.textContent = `${xf.value} s`; xf.style.setProperty('--p', `${(xf.value / 12) * 100}%`); };
         xf.onchange = () => saveAudio({ crossfade: +xf.value });
-        root.querySelector('#set-norm').onchange = (e) => saveAudio({ normalize: e.target.checked }).then(() => e.target.checked && analyzePending());
+        root.querySelector('#set-norm').onchange = (e) => { root.querySelector('.norm-level').classList.toggle('off', !e.target.checked); saveAudio({ normalize: e.target.checked }).then(() => e.target.checked && analyzePending()); };
+        root.querySelector('#set-norm-level').onchange = (e) => saveAudio({ normLevel: e.target.value });
         root.querySelector('#set-eq').onchange = (e) => { root.querySelector('.eq').classList.toggle('off', !e.target.checked); saveAudio({ eq: { ...L.settings.eq, enabled: e.target.checked } }); };
         root.querySelector('#set-preset').onchange = (e) => {
           const k = e.target.value;

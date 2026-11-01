@@ -4,7 +4,7 @@ import * as opfs from './opfs.js';
 import { Emitter, norm, sha256, uid } from './util.js';
 
 export const DEFAULT_SETTINGS = {
-  volume: 0.8, muted: false, crossfade: 0, normalize: false,
+  volume: 0.8, muted: false, crossfade: 0, normalize: false, normLevel: 'normal',
   eq: { enabled: false, preset: 'flat', gains: [0, 0, 0, 0, 0, 0] },
   libFilter: 'all', libSort: 'recents', libView: 'list', libHidden: [],
 };

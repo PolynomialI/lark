@@ -7,7 +7,11 @@ const KINDS = ['songs', 'playlists', 'folders', 'likes'];
 
 function newest(a = [], b = []) {
   const m = new Map();
-  for (const x of [...a, ...b]) { const cur = m.get(x.id); if (!cur || stamp(x) > stamp(cur)) m.set(x.id, x); }
+  for (const x of [...a, ...b]) {
+    const cur = m.get(x.id);
+    if (!cur || stamp(x) > stamp(cur)) m.set(x.id, x);
+    else if (stamp(x) === stamp(cur) && x !== cur) m.set(x.id, { ...x, ...cur }); // same edit: keep fields either side has (e.g. measured loudness)
+  }
   return [...m.values()];
 }
 

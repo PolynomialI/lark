@@ -70,16 +70,16 @@ async function importOne({ file, lrc, addedAt }) {
       const synced = c.lyrics.find((l) => l.syncText?.length && l.timeStampFormat !== 1);
       lyrics = synced ? toLrc(synced.syncText) : (c.lyrics.find((l) => l.text)?.text || '');
     }
-    const peak = c.replaygain_track_peak?.ratio;
-    let rg = c.replaygain_track_gain?.dB;
-    if (Number.isFinite(rg) && peak > 0) rg = Math.min(rg, -20 * Math.log10(peak));
+    // ReplayGain tags (gain to -18 LUFS) give the song's loudness without having to measure it.
+    const rg = c.replaygain_track_gain?.dB, rgPeak = c.replaygain_track_peak?.ratio;
 
     const song = {
       id, file: name, type: AUDIO_TYPES[ext] || file.type, size: file.size, name: file.name,
       title: c.title || guess.title, artist: c.artist || guess.artist, album: c.album || '',
       albumArtist: c.albumartist || '', track: c.track?.no || 0, disc: c.disk?.no || 0,
       year: c.year || 0, genre: c.genre?.[0] || '', duration: meta?.format.duration || 0,
-      coverId: cover?.id || null, lyrics, rg: Number.isFinite(rg) ? rg : null, loud: null,
+      coverId: cover?.id || null, lyrics,
+      lufs: Number.isFinite(rg) ? Math.round((-18 - rg) * 100) / 100 : null, peak: Number.isFinite(rg) && rgPeak > 0 ? rgPeak : null,
       addedAt: addedAt || Date.now(),
     };
     return { status: 'added', name: file.name, song, cover };

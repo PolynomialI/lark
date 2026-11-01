@@ -5,7 +5,7 @@ export default defineConfig({
   testDir: 'tests',
   testMatch: /.*\.spec\.mjs/,
   timeout: 180000,
-  workers: 2,
+  workers: 1, // one at a time: the timing tests (e.g. "no freezing") must not compete with the 4 GB test for CPU
   reporter: [['list']],
   use: {
     baseURL: 'http://localhost:5173',

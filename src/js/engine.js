@@ -12,6 +12,8 @@ export const EQ_PRESETS = {
   pop: [-1, 2, 4, 3, 0, -1], acoustic: [3, 2, 1, 2, 2, 2], electronic: [5, 3, 0, -1, 2, 4],
 };
 export const GAP_LEAD = 0.01;
+/** Volume normalisation targets, as in Spotify: Loud ≈ -11 LUFS, Normal ≈ -14 LUFS, Quiet ≈ -19 LUFS. */
+export const NORM_LEVELS = { quiet: -19, normal: -14, loud: -11 };
 export const MAX_VOLUME = 1.5; // 150%: above 100% the sound is boosted through Web Audio, with a limiter // seconds before the end at which the next song is started when not crossfading
 const db2gain = (db) => 10 ** (db / 20);
 
@@ -24,7 +26,7 @@ export class Engine extends Emitter {
   pendingNext = undefined;
   transition = null;    // { from, timer } while the previous song finishes / fades out
   stopAfterCurrent = false;
-  opts = { crossfade: 0, normalize: false, eq: { enabled: false, gains: [0, 0, 0, 0, 0, 0] } };
+  opts = { crossfade: 0, normalize: false, normLevel: 'normal', eq: { enabled: false, gains: [0, 0, 0, 0, 0, 0] } };
   volume = 0.8;
   muted = false;
   #timer = 0;
@@ -39,10 +41,9 @@ export class Engine extends Emitter {
   get currentTime() { return this.el.currentTime || this.slot.startAt || 0; }
   get duration() { const d = this.el.duration; return Number.isFinite(d) ? d : this.slot.song?.duration || 0; }
 
-  #build(web) {
+  async #build(web) {
     for (const s of this.slots) { s.el.pause(); s.el.removeAttribute('src'); s.el.load(); if (s.url) URL.revokeObjectURL(s.url); }
     if (!web && this.ctx) { this.ctx.close(); this.ctx = null; }
-    this.web = web;
     if (web && !this.ctx) {
       this.ctx = new AudioContext({ latencyHint: 'playback' });
       this.master = this.ctx.createGain();
@@ -54,13 +55,13 @@ export class Engine extends Emitter {
         return b;
       });
       this.filters.reduce((a, b) => (a.connect(b), b)).connect(this.master);
-      // Limiter, used only when the volume is above 100%, so boosted loud songs don't distort.
-      this.limiter = this.ctx.createDynamicsCompressor();
-      Object.entries({ threshold: -1.5, knee: 0, ratio: 20, attack: 0.002, release: 0.15 }).forEach(([k, v]) => { this.limiter[k].value = v; });
+      // Limiter, used when the volume is above 100% or normalisation is on Loud, so loud songs don't distort.
+      this.limiter = await this.#makeLimiter();
       this.limiter.connect(this.ctx.destination);
       this.master.connect(this.ctx.destination);
       this.ctx.onstatechange = () => { if (this.ctx?.state === 'suspended' && !this.el.paused) this.ctx.resume(); };
     }
+    this.web = web; // only once the audio graph (incl. the limiter) is ready
     this.slots = [0, 1].map((i) => {
       const el = new Audio();
       el.preload = 'auto';
@@ -86,6 +87,18 @@ export class Engine extends Emitter {
     this.#applyEq();
   }
 
+  /** Look-ahead limiter (AudioWorklet); falls back to a gentle soft clipper if worklets aren't available. */
+  async #makeLimiter() {
+    try {
+      await this.ctx.audioWorklet.addModule(new URL('limiter-worklet.js', location.href));
+      return new AudioWorkletNode(this.ctx, 'lark-limiter', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit' });
+    } catch {
+      const ws = this.ctx.createWaveShaper(), n = 2048, curve = new Float32Array(n);
+      for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1, a = Math.abs(x); curve[i] = a < 0.8 ? x : Math.sign(x) * (0.8 + 0.2 * Math.tanh((a - 0.8) / 0.2)); }
+      ws.curve = curve;
+      return ws;
+    }
+  }
   #setSrc(s, song) {
     s.song = song;
     s.ready = false;
@@ -98,9 +111,20 @@ export class Engine extends Emitter {
       s.ready = true;
     })());
   }
+  /**
+   * Gain that brings a song to the chosen loudness. Like Spotify: on Quiet and Normal a quiet song is only
+   * raised until its loudest moment reaches -1 dB (so it can't distort); on Loud the limiter catches the peaks.
+   */
+  #normGain(song) {
+    if (!this.opts.normalize || song?.lufs == null) return 1;
+    const level = NORM_LEVELS[this.opts.normLevel] ? this.opts.normLevel : 'normal';
+    let db = NORM_LEVELS[level] - song.lufs;
+    if (level !== 'loud' && song.peak > 0) db = Math.min(db, -1 - 20 * Math.log10(song.peak));
+    return db2gain(Math.max(-30, Math.min(20, db)));
+  }
   #applyNorm(s) {
     if (!this.web || !s.song) return;
-    s.norm.gain.value = this.opts.normalize ? db2gain(s.song.rg ?? s.song.loud ?? 0) : 1;
+    s.norm.gain.value = this.#normGain(s.song);
   }
   #setFade(s, v) {
     if (!this.web) return;
@@ -113,7 +137,8 @@ export class Engine extends Emitter {
       this.master.gain.value = v;
       this.slots.forEach((s) => { s.el.volume = 1; });
       this.master.disconnect();
-      this.master.connect(v > 1 ? this.limiter : this.ctx.destination);
+      const limit = v > 1 || (this.opts.normalize && this.opts.normLevel === 'loud');
+      this.master.connect(limit ? this.limiter : this.ctx.destination);
     } else this.slots.forEach((s) => { s.el.volume = Math.min(1, v); });
   }
   #needWeb() { return this.opts.crossfade > 0 || this.opts.normalize || this.opts.eq.enabled || this.volume > 1; }
@@ -123,7 +148,7 @@ export class Engine extends Emitter {
       const need = this.#needWeb();
       if (need === this.web) { this.#applyVolume(); return; }
       const song = this.song, t = this.currentTime, playing = !this.paused, next = this.next;
-      this.#build(need);
+      await this.#build(need);
       if (song) await this.load(song, { autoplay: playing, at: t });
       if (next) this.preload(next);
     }));
@@ -148,6 +173,7 @@ export class Engine extends Emitter {
     else {
       this.slots.forEach((s) => this.#applyNorm(s));
       this.#applyEq();
+      this.#applyVolume();
       this.#check();
     }
   }

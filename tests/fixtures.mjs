@@ -1,6 +1,6 @@
 // Test music, generated with ffmpeg plus hand-written ID3v2.4 tags (title, artist, album, track,
 // year, genre, cover art, lyrics). Files are cached in tests/.fixtures.
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -11,8 +11,9 @@ const syncsafe = (n) => Buffer.from([(n >> 21) & 127, (n >> 14) & 127, (n >> 7) 
 function frame(id, body) { return Buffer.concat([Buffer.from(id), syncsafe(body.length), Buffer.from([0, 0]), body]); }
 const text = (id, s) => frame(id, Buffer.concat([Buffer.from([3]), Buffer.from(s, 'utf8')]));
 /** Build an ID3v2.4 tag. */
-export function id3({ title, artist, album, albumArtist, track, year, genre, lyrics, cover }) {
+export function id3({ title, artist, album, albumArtist, track, year, genre, lyrics, cover, txxx = {} }) {
   const frames = [];
+  for (const [k, v] of Object.entries(txxx)) frames.push(frame('TXXX', Buffer.concat([Buffer.from([3]), Buffer.from(`${k}\0${v}`, 'utf8')])));
   if (title) frames.push(text('TIT2', title));
   if (artist) frames.push(text('TPE1', artist));
   if (album) frames.push(text('TALB', album));
@@ -130,4 +131,27 @@ export function showcase() {
   writeFileSync(join(dir, 'Neon Harbor - Harbor Lights.lrc'), ['[00:00.50]Harbor lights are calling', '[00:04.00]Over the water, over the wire', '[00:08.00]Every signal brings me home', '[00:12.00]Saltwater static in the air', '[00:16.00]We keep on drifting, drifting', '[00:20.00]Till the morning finds us there', '[00:24.00]Harbor lights, harbor lights'].join('\n'));
   writeFileSync(join(dir, 'done'), '');
   return dir;
+}
+
+/** Songs with different loudness for normalisation tests (measured with ffmpeg's EBU R128 meter). */
+export function loudness() {
+  const dir = join(FIX, 'loudness');
+  if (existsSync(join(dir, 'done'))) return dir;
+  mkdirSync(dir, { recursive: true });
+  const enc = (src, name, meta) => {
+    const raw = join(FIX, `ld-${name}.raw.mp3`);
+    if (!existsSync(raw)) ff('-f', 'lavfi', '-i', src, '-ac', '2', '-c:a', 'libmp3lame', '-b:a', '192k', '-map_metadata', '-1', '-id3v2_version', '0', raw);
+    writeFileSync(join(dir, `${name}.mp3`), Buffer.concat([id3({ title: name, artist: 'Loudness', album: 'Loudness', ...meta }), readFileSync(raw)]));
+  };
+  enc('anoisesrc=color=pink:amplitude=0.5:duration=12:seed=1', 'Loud Pink', {});
+  enc('anoisesrc=color=pink:amplitude=0.05:duration=12:seed=2', 'Quiet Pink', {});
+  enc('sine=frequency=60:duration=12,volume=-6dB', 'Bass Sine', {});
+  enc('sine=frequency=1000:duration=12,volume=-20dB', 'Tagged', { txxx: { REPLAYGAIN_TRACK_GAIN: '-3.50 dB', REPLAYGAIN_TRACK_PEAK: '0.500000' } });
+  writeFileSync(join(dir, 'done'), '');
+  return dir;
+}
+/** Integrated loudness of a file according to ffmpeg's EBU R128 meter. */
+export function ffmpegLufs(file) {
+  const r = spawnSync('ffmpeg', ['-hide_banner', '-nostats', '-i', file, '-filter_complex', 'ebur128', '-f', 'null', '-'], { encoding: 'utf8' });
+  return Number(r.stderr.match(/Integrated loudness:\s+I:\s+(-?[\d.]+) LUFS/)[1]);
 }
