@@ -18,6 +18,7 @@ export function initUI() {
     <aside class="sidebar">
       <nav class="panel nav"><div class="brand"><img src="icons/logo.svg" alt="" width="28" height="28"><span>Lark</span></div><a href="#/" data-nav="home">${ic('house')}<span>Home</span></a><a href="#/search" data-nav="search">${ic('search')}<span>Search</span></a></nav>
       <div class="panel side-lib" id="side-lib"></div>
+      <div class="side-resizer" role="separator" aria-orientation="vertical" aria-label="Resize Your Library (drag; double-click to collapse)" title="Drag to resize · double-click to collapse" tabindex="0"></div>
     </aside>
     <main class="panel main" id="main">
       <div class="topbar"><button class="circle" data-act="back" aria-label="Go back">${ic('chevron-left')}</button><button class="circle fwd" data-act="fwd" aria-label="Go forward">${ic('chevron-right')}</button><span class="topbar-title"></span><span class="spacer"></span><button class="circle sync-btn" data-act="sync-now" data-bind="sync-btn" hidden></button><a class="circle" href="#/settings" aria-label="Settings" title="Settings">${ic('settings')}</a></div>
@@ -36,6 +37,7 @@ export function initUI() {
 
   bindMini();
   bindRight();
+  bindSidebarResize();
   const main = $('#main');
   main.addEventListener('scroll', () => main.classList.toggle('scrolled', main.scrollTop > (isMobile() ? 200 : 120)), { passive: true });
   refreshAll();
@@ -91,7 +93,7 @@ let sideTimer = 0;
 function renderSidebar() {
   clearTimeout(sideTimer);
   sideTimer = 0;
-  if (!isMobile()) $('#side-lib').innerHTML = libraryHtml();
+  if (!isMobile()) $('#side-lib').innerHTML = libraryHtml({ sidebar: true });
 }
 const scheduleSidebar = () => { sideTimer ||= setTimeout(renderSidebar, progressActive ? 1500 : 100); };
 
@@ -112,6 +114,62 @@ function refreshPlayButtons() {
 P.player.on('state', () => { refreshPlayButtons(); scheduleSidebar(); });
 P.player.on('track', () => { refreshPlayButtons(); scheduleSidebar(); if (current?.r.name === 'lyrics') $('.lyr-page')?.style.setProperty('--c', store.lib.covers.get(P.engine.song?.coverId)?.color || '#333'); });
 P.player.on('queue', refreshPlayButtons);
+
+// ---------- resizable / collapsible sidebar (desktop) ----------
+const SIDE = { min: 240, max: 480, rail: 72, snap: 170 };
+let side = { w: 300, collapsed: false };
+try { side = { ...side, ...JSON.parse(localStorage.getItem('lark-side') || '{}') }; } catch {}
+function applySide(save = true) {
+  document.body.classList.toggle('side-collapsed', side.collapsed);
+  document.documentElement.style.setProperty('--side-w', `${side.collapsed ? SIDE.rail : side.w}px`);
+  if (save) try { localStorage.setItem('lark-side', JSON.stringify(side)); } catch {}
+}
+function bindSidebarResize() {
+  applySide(false);
+  const handle = $('.side-resizer');
+  let dragged = false; // a double-click that was really two drags shouldn't toggle
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    const startX = e.clientX, startW = side.collapsed ? SIDE.rail : side.w, before = side.w;
+    dragged = false;
+    handle.classList.add('active');
+    document.body.classList.add('resizing');
+    const move = (ev) => {
+      if (Math.abs(ev.clientX - startX) > 3) dragged = true;
+      const w = startW + ev.clientX - startX;
+      if (w < SIDE.snap) side.collapsed = true;
+      else { side.collapsed = false; side.w = Math.round(Math.min(SIDE.max, Math.max(SIDE.min, w))); }
+      applySide(false);
+    };
+    const up = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', up);
+      handle.removeEventListener('pointercancel', up);
+      handle.classList.remove('active');
+      document.body.classList.remove('resizing');
+      if (side.collapsed) side.w = before; // expanding later brings back the width from before the drag
+      applySide();
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up);
+    handle.addEventListener('pointercancel', up);
+  });
+  handle.addEventListener('dblclick', () => { if (!dragged) acts['side-toggle'](); });
+  handle.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); acts['side-toggle'](); }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      if (side.collapsed) { if (e.key === 'ArrowRight') side.collapsed = false; } else {
+        const w = side.w + (e.key === 'ArrowRight' ? 16 : -16);
+        if (w < SIDE.min) side.collapsed = true; else side.w = Math.min(SIDE.max, w);
+      }
+      applySide();
+    }
+  });
+}
+acts['side-toggle'] = () => { side.collapsed = !side.collapsed; applySide(); };
 
 // ---------- global clicks ----------
 Object.assign(acts, {

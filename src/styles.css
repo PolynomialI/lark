@@ -36,9 +36,31 @@ img { display: block; }
 .link-btn:hover { color: var(--text); text-decoration: underline; }
 
 /* ---------- layout ---------- */
-.shell { display: grid; height: 100dvh; grid-template-columns: 300px minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr) var(--pbar); gap: 8px; padding: 8px 8px 0; }
+.shell { display: grid; height: 100dvh; grid-template-columns: var(--side-w, 300px) minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr) var(--pbar); gap: 8px; padding: 8px 8px 0; }
 .panel { background: var(--surface); border-radius: 8px; }
 .sidebar { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+/* Drag handle in the gap between the sidebar and the page (resize; drag far left to collapse). */
+.sidebar { position: relative; min-width: 0; }
+.side-resizer { position: absolute; top: 0; bottom: 0; right: -8px; width: 8px; cursor: col-resize; z-index: 5; touch-action: none; }
+.side-resizer::after { content: ''; position: absolute; top: 8px; bottom: 8px; left: 3px; width: 2px; border-radius: 1px; background: transparent; transition: background .15s; }
+.side-resizer:hover::after, .side-resizer.active::after, .side-resizer:focus-visible::after { background: #ffffff59; }
+.side-resizer:focus-visible { outline: none; }
+body.resizing, body.resizing * { cursor: col-resize !important; user-select: none; }
+/* Collapsed: an icon rail, like Spotify's */
+.side-collapsed .brand span, .side-collapsed .nav a span, .side-collapsed .lib-title span { display: none; }
+.side-collapsed .nav { padding: 12px 0; align-items: center; }
+.side-collapsed .brand { padding: 4px 0 10px; justify-content: center; }
+.side-collapsed .nav a { padding: 8px; justify-content: center; }
+.side-collapsed .lib-head { flex-direction: column; gap: 10px; padding: 14px 0 8px; }
+.side-collapsed .lib-title { padding: 6px; }
+.side-collapsed .lib-head .icon-btn { width: 40px; height: 40px; background: #ffffff12; }
+.side-collapsed .lib-head .icon-btn:hover { background: #ffffff24; }
+.side-collapsed .chips, .side-collapsed .lib-tools, .side-collapsed .li-text, .side-collapsed .li-playing { display: none; }
+.side-collapsed .lib-list, .side-collapsed .lib-list.grid { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 4px 16px; }
+.side-collapsed .li { padding: 6px; justify-content: center; }
+.side-collapsed .li .cover { width: 48px; height: 48px; }
+.side-collapsed .li.playing .cover { outline: 2px solid var(--accent); outline-offset: 2px; }
+.side-collapsed .side-lib::-webkit-scrollbar { width: 0; }
 .nav { padding: 12px; display: flex; flex-direction: column; gap: 4px; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 4px 12px 10px; font-weight: 800; font-size: 20px; letter-spacing: -0.02em; }
 .nav a { display: flex; align-items: center; gap: 20px; padding: 8px 12px; color: var(--sub); font-weight: 700; border-radius: 4px; transition: color .15s; }
@@ -246,7 +268,7 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 /* ---------- library ---------- */
 .lib { display: flex; flex-direction: column; }
 .lib-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px 4px; }
-.lib-title { display: flex; gap: 12px; align-items: center; font-weight: 700; color: var(--sub); padding: 4px 8px; }
+.lib-title { display: flex; gap: 12px; align-items: center; font: inherit; font-weight: 700; color: var(--sub); padding: 4px 8px; background: none; border: 0; cursor: pointer; border-radius: 4px; }
 .lib-title:hover { color: var(--text); text-decoration: none; }
 .lib-title .ic { width: 24px; height: 24px; }
 .chips { display: flex; gap: 8px; padding: 8px 16px; flex-wrap: wrap; }

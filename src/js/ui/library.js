@@ -29,7 +29,8 @@ function items() {
   return [...fixed, ...out];
 }
 
-export function libraryHtml() {
+/** sidebar: the desktop sidebar (its title collapses/expands it); otherwise the phone's Your Library page. */
+export function libraryHtml({ sidebar = false } = {}) {
   const st = store.lib.settings, grid = st.libView === 'grid';
   const q = player.queue.context, here = location.hash;
   const rows = items().map(({ c, pinned }) => {
@@ -38,13 +39,13 @@ export function libraryHtml() {
     const href = hrefOf(c);
     const playing = q && q.type === c.type && (q.id ?? null) === (c.id ?? null);
     const drop = c.type === 'playlist' ? ` data-drop-playlist="${c.id}"` : c.type === 'liked' ? ' data-drop-liked' : '';
-    return `<a class="li${href === here ? ' active' : ''}${playing ? ' playing' : ''}" href="${href}" data-menu-ctx="${ctxAttr(c)}"${drop}>
+    return `<a class="li${href === here ? ' active' : ''}${playing ? ' playing' : ''}" href="${href}" data-menu-ctx="${ctxAttr(c)}"${drop} title="${esc(info.name)}">
       ${coverHtml(info.covers, { liked: info.liked, icon: info.icon, cls: `${grid ? '' : 'sm'} ${info.round ? 'round' : ''}` })}
       <div class="li-text"><div class="li-t">${esc(info.name)}</div><div class="li-s">${pinned && c.type === 'playlist' ? ic('pin', 'pinned') : ''}${esc(info.sub)}</div></div>
       ${playing && !player.engine.paused ? ic('volume-2', 'li-playing') : ''}</a>`;
   }).join('');
   return `<div class="lib">
-    <div class="lib-head"><a class="lib-title" href="#/library">${ic('library')}<span>Your Library</span></a>
+    <div class="lib-head">${sidebar ? `<button class="lib-title" data-act="side-toggle" title="Collapse or expand Your Library" aria-label="Collapse or expand Your Library">${ic('library')}<span>Your Library</span></button>` : `<a class="lib-title" href="#/library">${ic('library')}<span>Your Library</span></a>`}
       <button class="icon-btn" data-act="lib-add" aria-label="Create playlist or add music" title="Create playlist or add music">${ic('plus')}</button></div>
     <div class="chips">${st.libFilter !== 'all' ? `<button class="chip x" data-act="lib-filter" data-v="all" aria-label="Clear filter">${ic('x')}</button>` : ''}${Object.entries(FILTERS).map(([k, v]) => (st.libFilter === 'all' || st.libFilter === k) ? `<button class="chip${st.libFilter === k ? ' on' : ''}" data-act="lib-filter" data-v="${k}">${v}</button>` : '').join('')}</div>
     <div class="lib-tools"><button class="sort-btn" data-act="lib-sort">${SORTS[st.libSort]}${ic('arrow-up-down')}</button>
