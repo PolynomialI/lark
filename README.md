@@ -134,6 +134,7 @@ What the tests check:
 | `sync.spec.mjs` | Two devices sync through a stand-in for Google Drive: everything copies over (including audio for offline play), renames/likes/deletions go both ways, changes on both devices at once are both kept, the one-tap sign-in prompt, and waiting for Wi-Fi on mobile data |
 | `audio.spec.mjs` | The volume-boost limiter never clips, doesn't pump and leaves normal levels untouched; loudness matches ffmpeg's EBU R128 meter; Spotify's Normal/Loud levels give the right gain |
 | `layout.spec.mjs` | The desktop sidebar resizes by dragging its edge, collapses into an icon rail, is remembered, and expands again |
+| `multiwindow.spec.mjs` | With Lark open in two windows, changes in one are kept and show up in the other; syncing from both at once doesn't duplicate anything |
 | `phone.spec.mjs` | Phone layout: tabs, mini-player swipe to skip, swipe up/down for the full player, bottom-sheet menus, Back closes sheets |
 
 ## How it's built

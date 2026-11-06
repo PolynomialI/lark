@@ -27,7 +27,8 @@ export async function init() {
   st = { ...st, ...((await db.kvGet('sync')) || {}) };
   tok = (await db.kvGet('syncToken')) || null;
   set({ configured: auth.configured(), connected: st.connected, email: st.email, lastSync: st.lastSync || 0, state: st.connected ? 'idle' : 'off' });
-  store.events.on('change', (what) => { if (!applying && what !== 'files') schedule(what === 'history' ? 60000 : 5000); });
+  // ('all' = the library was reloaded, e.g. because another Lark window saved something; that window syncs it.)
+  store.events.on('change', (what) => { if (!applying && what !== 'files' && what !== 'all') schedule(what === 'history' ? 60000 : 5000); });
   store.events.on('settings', (p) => { if (!applying && ('libHidden' in p || 'likedOrder' in p || 'songsOrder' in p)) schedule(5000); });
   addEventListener('online', () => schedule(1000));
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') schedule(1000); });
@@ -84,7 +85,9 @@ export function run() {
       if (!drive.hasToken()) { needAuth(); break; }
       try {
         set({ state: 'syncing', message: 'Syncing…', progress: null });
-        await doSync();
+        // One sync at a time, even with Lark open in several windows.
+        if (navigator.locks?.request) await navigator.locks.request('lark-sync', () => doSync());
+        else await doSync();
         st.lastSync = Date.now();
         await save();
         set({ state: 'idle', lastSync: st.lastSync, progress: null, message: status.waitingWifi ? `${status.waitingWifi} songs will transfer on Wi-Fi.` : 'Up to date.' });
@@ -101,11 +104,12 @@ function needAuth() {
   events.emit('need-auth');
 }
 
-function localState() {
-  const L = store.lib;
+/** This device's library as saved (read fresh, so another Lark window's changes are included). */
+async function localState() {
+  const L = await store.readSaved();
   return {
-    songs: [...L.songs.values()], playlists: [...L.playlists.values()], folders: [...L.folders.values()],
-    likes: [...L.likes].map(([songId, at]) => ({ songId, at })),
+    songs: L.songs, playlists: L.playlists, folders: L.folders,
+    likes: L.likes.map(({ songId, at }) => ({ songId, at })),
     history: L.history.map(({ songId, at, ctx }) => ({ songId, at, ctx: ctx ?? null })),
     hidden: { list: L.settings.libHidden || [], at: L.settings.libHiddenAt || 0 },
     orders: Object.fromEntries(['liked', 'songs'].map((k) => [k, { list: L.settings[`${k}Order`] || [], at: L.settings[`${k}OrderAt`] || 0 }])),
@@ -129,7 +133,7 @@ async function doSync() {
   const libFile = files.get('library.json');
 
   // 1. Merge the library both ways.
-  const local = localState();
+  const local = await localState();
   let merged = local, remoteHash = st.syncedHash;
   if (libFile && libFile.md5Checksum !== st.remoteMd5) {
     const remote = await (await drive.download(libFile.id)).json();
@@ -139,7 +143,7 @@ async function doSync() {
   const mergedText = canon(merged);
   await downloadCovers(merged, files);
   if (mergedText !== canon(local)) await applyLocal(merged);
-  const finalState = localState();
+  const finalState = await localState();
   const finalHash = await hashText(canon(finalState));
   if (!libFile || finalHash !== remoteHash) {
     if (libFile) {
@@ -212,6 +216,6 @@ async function applyLocal(merged) {
   applying = true;
   try {
     // Merge once more with this device's current library, in case it changed during the sync.
-    await store.replaceLibrary(merge(localState(), merged));
+    await store.replaceLibrary(merge(await localState(), merged));
   } finally { applying = false; }
 }

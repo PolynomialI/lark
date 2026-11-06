@@ -54,6 +54,23 @@ export async function clear(...stores) {
   for (const s of stores) tx.objectStore(s).clear();
   return done(tx);
 }
+/**
+ * Read-modify-write records in one transaction, so a change never overwrites newer data saved by another
+ * window. fn(current) returns the new record (or undefined to leave it). Resolves to the new records.
+ */
+export async function updateMany(store, keys, fn) {
+  const db = await openDB();
+  const tx = db.transaction(store, 'readwrite');
+  const os = tx.objectStore(store);
+  const out = [];
+  keys.forEach((key, i) => {
+    const r = os.get(key);
+    r.onsuccess = () => { const v = fn(r.result); if (v !== undefined) { os.put(v); out[i] = v; } };
+  });
+  await done(tx);
+  return out;
+}
+export const update = async (store, key, fn) => (await updateMany(store, [key], fn))[0];
 /** Replace the whole contents of some stores in one transaction: { store: [records] }. */
 export async function replace(data) {
   const db = await openDB();

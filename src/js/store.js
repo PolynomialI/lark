@@ -17,7 +17,19 @@ export const lib = {
 };
 export const events = new Emitter();
 let derived = null;
-const changed = (what) => { if (what === 'songs') derived = null; events.emit('change', what); };
+// Several Lark windows (e.g. the installed app and a browser tab) share the same storage: when one saves
+// something, the others reload the library, so none of them works from (and saves back) an old copy.
+const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('lark-library') : null;
+let reloadTimer = 0;
+const broadcast = () => channel?.postMessage('changed');
+if (channel) channel.onmessage = () => { clearTimeout(reloadTimer); reloadTimer = setTimeout(reloadFromOtherWindow, 100); };
+async function reloadFromOtherWindow() {
+  const before = new Set(lib.songs.keys());
+  await load();
+  const gone = [...before].filter((id) => !lib.songs.has(id));
+  if (gone.length) events.emit('deleted', gone);
+}
+const changed = (what) => { if (what === 'songs') derived = null; broadcast(); events.emit('change', what); };
 
 export async function load() {
   const [songs, covers, playlists, folders, likes, history, settings, tomb, files] = await Promise.all([
@@ -42,11 +54,17 @@ export async function load() {
 async function addTomb(kind, ids) {
   const now = Date.now();
   ids.forEach((id) => { lib.tomb[kind][id] = now; });
-  await db.kvSet('tombstones', lib.tomb);
+  const rec = await db.update('kv', 'tombstones', (r) => {
+    const t = { songs: {}, playlists: {}, folders: {}, likes: {}, ...(r?.value || {}) };
+    t[kind] = { ...t[kind] };
+    ids.forEach((id) => { t[kind][id] = now; });
+    return { key: 'tombstones', value: t };
+  });
+  lib.tomb = rec.value;
 }
 /** Whether this song's audio is on this device (it may still be downloading from Google Drive). */
 export const isAvailable = (s) => !!s && lib.files.has(s.file);
-export function markAvailable(file) { lib.files.add(file); events.emit('change', 'files'); }
+export function markAvailable(file) { lib.files.add(file); broadcast(); events.emit('change', 'files'); }
 
 // ---------- display helpers ----------
 export const title = (s) => s?.title || s?.name || 'Unknown';
@@ -105,23 +123,21 @@ export async function addSongs(songs) {
   return fresh.length;
 }
 export async function updateSongs(ids, patch, { silent = false } = {}) {
-  const list = ids.map((id) => lib.songs.get(id)).filter(Boolean);
   const now = Date.now();
-  for (const s of list) { Object.assign(s, typeof patch === 'function' ? patch(s) : patch); if (!silent) s.updatedAt = now; }
-  await db.put('songs', ...list);
+  const fresh = await db.updateMany('songs', ids, (s) => s && { ...s, ...(typeof patch === 'function' ? patch(s) : patch), ...(silent ? {} : { updatedAt: now }) });
+  fresh.forEach((s) => { if (!s) return; const m = lib.songs.get(s.id); if (m) Object.assign(m, s); else lib.songs.set(s.id, s); });
   if (!silent) changed('songs');
 }
 export async function deleteSongs(ids) {
   const set = new Set(ids);
   const files = ids.map((id) => lib.songs.get(id)?.file).filter(Boolean);
   ids.forEach((id) => { lib.songs.delete(id); lib.likes.delete(id); });
-  const pls = [...lib.playlists.values()].filter((p) => p.songs.some((e) => set.has(e.songId)));
-  pls.forEach((p) => { p.songs = p.songs.filter((e) => !set.has(e.songId)); p.updatedAt = Date.now(); });
+  const pls = [...lib.playlists.values()].filter((p) => p.songs.some((e) => set.has(e.songId))).map((p) => p.id);
   files.forEach((f) => lib.files.delete(f));
   await addTomb('songs', ids);
   await db.del('songs', ...ids);
   await db.del('likes', ...ids);
-  if (pls.length) await db.put('playlists', ...pls);
+  for (const id of pls) await editPl(id, (p) => ({ songs: p.songs.filter((e) => !set.has(e.songId)) }), { quiet: true });
   for (const f of files) await opfs.remove(f);
   events.emit('deleted', ids);
   changed('songs');
@@ -148,7 +164,9 @@ export async function reorderList(key, songIds, to) {
 // ---------- likes ----------
 export const isLiked = (id) => lib.likes.has(id);
 export async function setLiked(ids, liked) {
-  const at = Date.now();
+  // Always later than the latest like, so "newest first" is exact even for likes in the same millisecond.
+  let at = Date.now();
+  for (const t of lib.likes.values()) if (t >= at) at = t + 1;
   if (liked) {
     const add = ids.filter((id) => !lib.likes.has(id));
     add.forEach((id, i) => lib.likes.set(id, at + i));
@@ -165,6 +183,15 @@ export const likedSongIds = () => withOrder([...lib.likes.entries()].filter(([id
 
 // ---------- playlists & folders ----------
 const savePl = async (p) => { p.updatedAt = Date.now(); await db.put('playlists', p); changed('playlists'); };
+/** Change a playlist from its latest saved version: fn(saved) returns the fields to change. */
+async function editPl(id, fn, { quiet = false } = {}) {
+  const rec = await db.update('playlists', id, (p) => p && { ...p, ...fn(p), updatedAt: Date.now() });
+  if (!rec) return null;
+  const m = lib.playlists.get(id);
+  if (m) { for (const k of Object.keys(m)) if (!(k in rec)) delete m[k]; Object.assign(m, rec); } else lib.playlists.set(id, rec);
+  if (!quiet) changed('playlists');
+  return rec;
+}
 export async function createPlaylist({ name, songIds = [], folderId = null, description = '', coverId = null } = {}) {
   const n = [...lib.playlists.values()].length + 1;
   const now = Date.now();
@@ -174,10 +201,7 @@ export async function createPlaylist({ name, songIds = [], folderId = null, desc
   await savePl(p);
   return p;
 }
-export async function updatePlaylist(id, patch) {
-  const p = lib.playlists.get(id);
-  if (p) { Object.assign(p, patch); await savePl(p); }
-}
+export async function updatePlaylist(id, patch) { await editPl(id, () => patch); }
 export async function deletePlaylist(id) {
   lib.playlists.delete(id);
   await addTomb('playlists', [id]);
@@ -190,29 +214,29 @@ export async function duplicatePlaylist(id) {
 }
 /** Returns how many songs were actually added (duplicates are skipped). */
 export async function addToPlaylist(id, songIds) {
-  const p = lib.playlists.get(id);
-  const have = new Set(p.songs.map((e) => e.songId));
-  const now = Date.now();
-  const add = [...new Set(songIds)].filter((s) => !have.has(s));
-  p.songs.push(...add.map((songId, i) => ({ songId, addedAt: now + i })));
-  await savePl(p);
-  return add.length;
+  let added = 0;
+  await editPl(id, (p) => {
+    const have = new Set(p.songs.map((e) => e.songId));
+    const now = Date.now();
+    const add = [...new Set(songIds)].filter((s) => !have.has(s));
+    added = add.length;
+    return { songs: [...p.songs, ...add.map((songId, i) => ({ songId, addedAt: now + i }))] };
+  });
+  return added;
 }
 export async function removeFromPlaylist(id, songIds) {
-  const p = lib.playlists.get(id);
   const rm = new Set(songIds);
-  p.songs = p.songs.filter((e) => !rm.has(e.songId));
-  await savePl(p);
+  await editPl(id, (p) => ({ songs: p.songs.filter((e) => !rm.has(e.songId)) }));
 }
 /** Move `songIds` (in their current relative order) so they sit at index `to` of the remaining list. */
 export async function reorderPlaylist(id, songIds, to) {
-  const p = lib.playlists.get(id);
   const mv = new Set(songIds);
-  const moving = p.songs.filter((e) => mv.has(e.songId));
-  const rest = p.songs.filter((e) => !mv.has(e.songId));
-  rest.splice(Math.max(0, Math.min(to, rest.length)), 0, ...moving);
-  p.songs = rest;
-  await savePl(p);
+  await editPl(id, (p) => {
+    const moving = p.songs.filter((e) => mv.has(e.songId));
+    const rest = p.songs.filter((e) => !mv.has(e.songId));
+    rest.splice(Math.max(0, Math.min(to, rest.length)), 0, ...moving);
+    return { songs: rest };
+  });
 }
 export async function createFolder(name) {
   const f = { id: uid(), name: name || 'New Folder', createdAt: Date.now(), updatedAt: Date.now() };
@@ -222,16 +246,12 @@ export async function createFolder(name) {
   return f;
 }
 export async function renameFolder(id, name) {
-  const f = lib.folders.get(id);
-  f.name = name;
-  f.updatedAt = Date.now();
-  await db.put('folders', f);
+  const rec = await db.update('folders', id, (f) => f && { ...f, name, updatedAt: Date.now() });
+  if (rec) Object.assign(lib.folders.get(id) || {}, rec);
   changed('playlists');
 }
 export async function deleteFolder(id) {
-  const pls = [...lib.playlists.values()].filter((p) => p.folderId === id);
-  pls.forEach((p) => { p.folderId = null; p.updatedAt = Date.now(); });
-  if (pls.length) await db.put('playlists', ...pls);
+  for (const p of [...lib.playlists.values()].filter((x) => x.folderId === id)) await editPl(p.id, () => ({ folderId: null }), { quiet: true });
   lib.folders.delete(id);
   await addTomb('folders', [id]);
   await db.del('folders', id);
@@ -247,9 +267,8 @@ export async function addHistory(songId, ctx) {
   }));
   lib.history.push(h);
   if (ctx?.type === 'playlist' && lib.playlists.has(ctx.id)) {
-    const p = lib.playlists.get(ctx.id);
-    p.playedAt = h.at;
-    await db.put('playlists', p);
+    lib.playlists.get(ctx.id).playedAt = h.at;
+    await db.update('playlists', ctx.id, (p) => p && { ...p, playedAt: h.at }); // only the play time
   }
   if (lib.history.length > 5000) {
     const old = lib.history.splice(0, lib.history.length - 5000);
@@ -297,9 +316,17 @@ export function setHiddenInLibrary(c, hidden) {
 }
 
 export async function setSettings(patch) {
-  Object.assign(lib.settings, patch);
-  await db.kvSet('settings', lib.settings);
+  const rec = await db.update('kv', 'settings', (r) => ({ key: 'settings', value: { ...(r?.value || {}), ...patch } }));
+  Object.assign(lib.settings, rec.value);
+  broadcast();
   events.emit('settings', patch);
+}
+/** The library exactly as saved (not this window's copy in memory), for sync. */
+export async function readSaved() {
+  const [songs, playlists, folders, likes, history, settings, tomb] = await Promise.all([
+    db.getAll('songs'), db.getAll('playlists'), db.getAll('folders'), db.getAll('likes'), db.getAll('history'), db.kvGet('settings'), db.kvGet('tombstones'),
+  ]);
+  return { songs, playlists, folders, likes, history: history.sort((a, b) => a.at - b.at), settings: settings || {}, tomb: { songs: {}, playlists: {}, folders: {}, likes: {}, ...(tomb || {}) } };
 }
 
 // ---------- derived: albums & artists ----------
@@ -383,12 +410,13 @@ export async function replaceLibrary(s) {
   await db.replace({ songs: s.songs, playlists: s.playlists, folders: s.folders, likes: s.likes, history: s.history.map(({ songId, at, ctx }) => ({ songId, at, ctx })) });
   await db.kvSet('tombstones', s.tomb);
   const o = s.orders || {};
-  await db.kvSet('settings', {
-    ...lib.settings, libHidden: s.hidden.list, libHiddenAt: s.hidden.at,
+  await db.update('kv', 'settings', (r) => ({ key: 'settings', value: {
+    ...(r?.value || {}), libHidden: s.hidden.list, libHiddenAt: s.hidden.at,
     ...(o.liked ? { likedOrder: o.liked.list, likedOrderAt: o.liked.at } : {}), ...(o.songs ? { songsOrder: o.songs.list, songsOrderAt: o.songs.at } : {}),
-  });
+  } }));
   for (const x of gone) await opfs.remove(x.file);
   await load();
+  broadcast();
   if (gone.length) events.emit('deleted', gone.map((x) => x.id));
 }
 
