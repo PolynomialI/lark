@@ -162,3 +162,44 @@ test('albums, artists and All songs can be removed from Your Library, and added 
   await page.locator('.menu-item', { hasText: 'Add to Your Library' }).click();
   await expect(side('Crimson Band')).toHaveCount(1);
 });
+
+test('Liked Songs and All songs can be reordered by dragging; the order is kept and used for playback', async ({ page }) => {
+  await openApp(page);
+  await importDir(page, basic());
+  await page.evaluate(async () => {
+    const { store } = window.__lark;
+    const id = (t) => [...store.lib.songs.values()].find((s) => s.title === t).id;
+    for (const t of ['Morning Light', 'Evening Glow', 'Red Song']) await store.setLiked([id(t)], true);
+  });
+  await page.goto('/#/liked');
+  const titles = () => page.locator('.tl-body .t').allTextContents();
+  await expect(page.locator('.tl-body .t')).toHaveText(['Red Song', 'Evening Glow', 'Morning Light']); // newest liked first
+  await dragTo(page, row(page, 'Morning Light'), row(page, 'Red Song'), 4);
+  await expect(page.locator('.tl-body .t')).toHaveText(['Morning Light', 'Red Song', 'Evening Glow']);
+  await page.goto('/#/songs');
+  await expect(page.locator('.tl-body .tr')).toHaveCount(4);
+  const first = (await titles())[0];
+  await dragTo(page, row(page, 'Untagged Title'), row(page, first), 4);
+  await expect(page.locator('.tl-body .t').first()).toHaveText('Untagged Title');
+  const songsOrder = await titles();
+  expect(songsOrder[0]).toBe('Untagged Title');
+
+  await page.reload();
+  await page.waitForSelector('html[data-ready="1"]', { state: 'attached' });
+  await page.goto('/#/liked');
+  await expect(page.locator('.tl-body .t')).toHaveText(['Morning Light', 'Red Song', 'Evening Glow']);
+  // The big play button plays in that order.
+  await page.click('.ab .big-play');
+  await page.waitForFunction(() => window.__lark.engine.song?.title === 'Morning Light');
+  expect(await page.evaluate(() => window.__lark.queue.upcoming().map((id) => window.__lark.store.lib.songs.get(id).title))).toEqual(['Red Song', 'Evening Glow']);
+  await page.evaluate(() => window.__lark.player.pause());
+  await page.goto('/#/songs');
+  await expect(page.locator('.tl-body .t')).toHaveText(songsOrder);
+
+  // Sorted by title: dragging explains how to reorder instead of doing nothing.
+  await page.goto('/#/liked');
+  await page.click('[data-sort]');
+  await page.locator('.menu-item', { hasText: 'Title' }).click();
+  await dragTo(page, row(page, 'Red Song'), row(page, 'Evening Glow'), 4);
+  await expect(page.locator('#toast')).toContainText('sort by Custom order');
+});

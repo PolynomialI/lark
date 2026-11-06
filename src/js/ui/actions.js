@@ -70,7 +70,7 @@ export function ctxMenu(c, at) {
     if (!p) return;
     items = [...queueItems, '-',
       { label: 'Edit details', icon: 'pencil', run: () => editPlaylist(p.id) },
-      isTouch() && p.songs.length > 1 && { label: 'Reorder songs', icon: 'grip-vertical', run: () => { go(`#/playlist/${p.id}`); setTimeout(() => acts['reorder-start'](p.id), 50); } },
+      isTouch() && p.songs.length > 1 && { label: 'Reorder songs', icon: 'grip-vertical', run: () => { go(`#/playlist/${p.id}`); setTimeout(() => acts['reorder-start'](`playlist:${p.id}`), 50); } },
       { label: 'Duplicate', icon: 'copy', run: async () => { const d = await store.duplicatePlaylist(p.id); toast(`Created ${d.name}`); } },
       { label: p.pinned ? 'Unpin playlist' : 'Pin playlist', icon: 'pin', run: () => store.updatePlaylist(p.id, { pinned: !p.pinned }) },
       { label: 'Move to folder', icon: 'folder-input', sub: () => folderItems(p) },
@@ -98,7 +98,12 @@ export function ctxMenu(c, at) {
         if (await confirmDialog('Delete folder?', `"${f.name}" will be deleted. Its playlists are kept.`)) { await store.deleteFolder(f.id); if (location.hash === `#/folder/${f.id}`) go('#/'); }
       } },
     ];
-  } else items = [...queueItems, { label: 'Add to playlist', icon: 'list-plus', sub: () => addToPlaylistItems(ids()) }, ...(c.type === 'liked' || c.type === 'songs' ? [libraryItem(c)] : [])];
+  } else {
+    const ownList = c.type === 'liked' || c.type === 'songs';
+    items = tidy([...queueItems, { label: 'Add to playlist', icon: 'list-plus', sub: () => addToPlaylistItems(ids()) },
+      ownList && isTouch() && ids().length > 1 && { label: 'Reorder songs', icon: 'grip-vertical', run: () => { go(store.contextHref(c)); setTimeout(() => acts['reorder-start'](c.type), 50); } },
+      ownList && libraryItem(c)]);
+  }
   const info = itemInfo(c);
   openMenu(items, at, info && { title: info.name, sub: info.sub, cover: coverHtml(info.covers, { liked: info.liked, icon: info.icon, cls: 'sm' }) });
 }

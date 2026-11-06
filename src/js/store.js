@@ -126,7 +126,24 @@ export async function deleteSongs(ids) {
   events.emit('deleted', ids);
   changed('songs');
 }
-export const allSongIds = () => [...lib.songs.values()].sort((a, b) => b.addedAt - a.addedAt).map((s) => s.id);
+// Liked Songs and All songs can have a custom order (drag to reorder): a stored list of song ids.
+// Songs not in it yet (newly added or liked) come first, newest first.
+function withOrder(ids, key) {
+  const order = lib.settings[`${key}Order`];
+  if (!order?.length) return ids;
+  const pos = new Map(order.map((id, i) => [id, i]));
+  return [...ids.filter((id) => !pos.has(id)), ...ids.filter((id) => pos.has(id)).sort((a, b) => pos.get(a) - pos.get(b))];
+}
+export const allSongIds = () => withOrder([...lib.songs.values()].sort((a, b) => b.addedAt - a.addedAt).map((s) => s.id), 'songs');
+/** Move songs (keeping their relative order) to index `to` of the rest of Liked Songs ('liked') or All songs ('songs'). */
+export async function reorderList(key, songIds, to) {
+  const cur = key === 'liked' ? likedSongIds() : allSongIds();
+  const mv = new Set(songIds);
+  const rest = cur.filter((id) => !mv.has(id));
+  rest.splice(Math.max(0, Math.min(to, rest.length)), 0, ...cur.filter((id) => mv.has(id)));
+  await setSettings({ [`${key}Order`]: rest, [`${key}OrderAt`]: Date.now() });
+  changed(key === 'liked' ? 'likes' : 'songs');
+}
 
 // ---------- likes ----------
 export const isLiked = (id) => lib.likes.has(id);
@@ -144,7 +161,7 @@ export async function setLiked(ids, liked) {
   changed('likes');
 }
 export const toggleLike = (id) => setLiked([id], !isLiked(id));
-export const likedSongIds = () => [...lib.likes.entries()].filter(([id]) => lib.songs.has(id)).sort((a, b) => b[1] - a[1]).map(([id]) => id);
+export const likedSongIds = () => withOrder([...lib.likes.entries()].filter(([id]) => lib.songs.has(id)).sort((a, b) => b[1] - a[1]).map(([id]) => id), 'liked');
 
 // ---------- playlists & folders ----------
 const savePl = async (p) => { p.updatedAt = Date.now(); await db.put('playlists', p); changed('playlists'); };
@@ -365,7 +382,11 @@ export async function replaceLibrary(s) {
   const gone = [...lib.songs.values()].filter((x) => !now.has(x.id));
   await db.replace({ songs: s.songs, playlists: s.playlists, folders: s.folders, likes: s.likes, history: s.history.map(({ songId, at, ctx }) => ({ songId, at, ctx })) });
   await db.kvSet('tombstones', s.tomb);
-  await db.kvSet('settings', { ...lib.settings, libHidden: s.hidden.list, libHiddenAt: s.hidden.at });
+  const o = s.orders || {};
+  await db.kvSet('settings', {
+    ...lib.settings, libHidden: s.hidden.list, libHiddenAt: s.hidden.at,
+    ...(o.liked ? { likedOrder: o.liked.list, likedOrderAt: o.liked.at } : {}), ...(o.songs ? { songsOrder: o.songs.list, songsOrderAt: o.songs.at } : {}),
+  });
   for (const x of gone) await opfs.remove(x.file);
   await load();
   if (gone.length) events.emit('deleted', gone.map((x) => x.id));

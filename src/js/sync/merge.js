@@ -35,7 +35,12 @@ export function merge(a, b) {
     .filter((h) => { const k = `${h.songId}@${h.at}`; if (seen.has(k)) return false; seen.add(k); return true; })
     .sort((x, y) => x.at - y.at).slice(-5000).map(({ songId, at, ctx }) => ({ songId, at, ctx: ctx ?? null }));
   const ha = a.hidden || { list: [], at: 0 }, hb = b.hidden || { list: [], at: 0 };
-  return { songs, playlists, folders, likes, history, hidden: hb.at > ha.at ? hb : ha, tomb };
+  const orders = {};
+  for (const k of ['liked', 'songs']) {
+    const oa = a.orders?.[k] || { list: [], at: 0 }, ob = b.orders?.[k] || { list: [], at: 0 };
+    orders[k] = ob.at > oa.at ? ob : oa;
+  }
+  return { songs, playlists, folders, likes, history, hidden: hb.at > ha.at ? hb : ha, orders, tomb };
 }
 
 /** Same data → same text, whatever the order of items or object keys. */
@@ -45,6 +50,6 @@ export function canon(s) {
   const by = (k) => (x, y) => (String(x[k]) < String(y[k]) ? -1 : String(x[k]) > String(y[k]) ? 1 : 0);
   return JSON.stringify(stable({
     songs: [...s.songs].sort(by('id')), playlists: [...s.playlists].sort(by('id')), folders: [...s.folders].sort(by('id')),
-    likes: [...s.likes].sort(by('songId')), history: s.history, hidden: s.hidden, tomb: s.tomb,
+    likes: [...s.likes].sort(by('songId')), history: s.history, hidden: s.hidden, orders: s.orders, tomb: s.tomb,
   }));
 }

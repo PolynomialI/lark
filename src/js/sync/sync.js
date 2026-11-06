@@ -28,7 +28,7 @@ export async function init() {
   tok = (await db.kvGet('syncToken')) || null;
   set({ configured: auth.configured(), connected: st.connected, email: st.email, lastSync: st.lastSync || 0, state: st.connected ? 'idle' : 'off' });
   store.events.on('change', (what) => { if (!applying && what !== 'files') schedule(what === 'history' ? 60000 : 5000); });
-  store.events.on('settings', (p) => { if (!applying && 'libHidden' in p) schedule(5000); });
+  store.events.on('settings', (p) => { if (!applying && ('libHidden' in p || 'likedOrder' in p || 'songsOrder' in p)) schedule(5000); });
   addEventListener('online', () => schedule(1000));
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') schedule(1000); });
   setInterval(() => { if (document.visibilityState === 'visible') schedule(0); }, 180000);
@@ -108,6 +108,7 @@ function localState() {
     likes: [...L.likes].map(([songId, at]) => ({ songId, at })),
     history: L.history.map(({ songId, at, ctx }) => ({ songId, at, ctx: ctx ?? null })),
     hidden: { list: L.settings.libHidden || [], at: L.settings.libHiddenAt || 0 },
+    orders: Object.fromEntries(['liked', 'songs'].map((k) => [k, { list: L.settings[`${k}Order`] || [], at: L.settings[`${k}OrderAt`] || 0 }])),
     tomb: L.tomb,
   };
 }

@@ -51,14 +51,15 @@ function filterIds(ids, q) {
 }
 
 /** Shared page for anything that is a list of songs. */
-function trackPage({ key, c, head, ids, dates, dateLabel, playlistId, sorts, defaultSort, trackNumbers, showAlbum = true, deps, empty, extra = '' }) {
+/** reorder(movedIds, to): makes the list reorderable by drag & drop (in Custom order). */
+function trackPage({ key, c, head, ids, dates, dateLabel, playlistId, reorder, sorts, defaultSort, trackNumbers, showAlbum = true, deps, empty, extra = '' }) {
   const st = viewState.get(key) || { sort: defaultSort || 'custom', dir: defaultSort === 'added' ? -1 : 1, filter: '' };
   viewState.set(key, st);
   const tools = sorts ? `<label class="filter">${ic('search')}<input type="search" placeholder="Search in list" value="${esc(st.filter)}" aria-label="Search in list"></label>
     <button class="sort-btn" data-sort>${SORTS[st.sort]}${ic('arrow-up-down')}</button>` : '';
   let list;
   const shown = () => sortIds(filterIds(ids, st.filter), st, dates);
-  const editing = !!(playlistId && st.editing);
+  const editing = !!(reorder && st.editing);
   return {
     deps,
     html: `${head}<div class="page-body" style="--c:${/--c:([^"]+)"/.exec(head)?.[1] || '#333'}">${editing
@@ -68,10 +69,10 @@ function trackPage({ key, c, head, ids, dates, dateLabel, playlistId, sorts, def
     mount(root) {
       const host = root.querySelector('.tl-host');
       if (!host) return;
-      const reorderable = () => !!playlistId && st.sort === 'custom' && st.dir > 0 && !st.filter;
+      const reorderable = () => !!reorder && st.sort === 'custom' && st.dir > 0 && !st.filter;
       list = new TrackList(host, {
         ids: shown(), ctx: c, dates, dateLabel, trackNumbers, showAlbum, playlistId, reorderable: reorderable(), editing,
-        onReorder: (moved, to) => store.reorderPlaylist(playlistId, moved, to),
+        onReorder: reorder, reorderHint: reorder ? 'To reorder, sort by Custom order (and clear "Search in list").' : null,
       });
       const refresh = () => { list.o.reorderable = reorderable(); list.setIds(shown()); };
       root.querySelector('.filter input')?.addEventListener('input', (e) => { st.filter = e.target.value; refresh(); });
@@ -172,7 +173,8 @@ export const views = {
     return trackPage({
       key: 'songs', c: { type: 'songs' }, ids, dates: new Map([...L.songs.values()].map((s) => [s.id, s.addedAt])),
       head: pageHead({ kind: 'Your library', title: 'All songs', meta: `${songCount(ids.length)}, ${fmtLong(totalTime(ids))}`, cover: coverHtml([], { icon: 'music' }), color: '#3d5a80' }),
-      sorts: ['added', 'title', 'artist', 'album', 'duration'], defaultSort: 'added', deps: ['songs'],
+      sorts: ['custom', 'added', 'title', 'artist', 'album', 'duration'], defaultSort: 'custom', deps: ['songs'],
+      reorder: (moved, to) => store.reorderList('songs', moved, to),
       empty: '<p>No songs yet.</p><button class="btn primary" data-act="add-files">Add music files</button>',
     });
   },
@@ -181,7 +183,8 @@ export const views = {
     return trackPage({
       key: 'liked', c: { type: 'liked' }, ids, dates: new Map(L.likes),
       head: pageHead({ kind: 'Playlist', title: 'Liked Songs', meta: `${songCount(ids.length)}, ${fmtLong(totalTime(ids))}`, cover: coverHtml([], { liked: true }), color: '#8c3f35' }),
-      sorts: ['added', 'title', 'artist', 'album', 'duration'], defaultSort: 'added', deps: ['songs', 'likes'],
+      sorts: ['custom', 'added', 'title', 'artist', 'album', 'duration'], defaultSort: 'custom', deps: ['songs', 'likes'],
+      reorder: (moved, to) => store.reorderList('liked', moved, to),
       empty: '<p>Songs you like will appear here. Save songs by tapping the heart.</p>',
     });
   },
@@ -201,7 +204,7 @@ export const views = {
     const ids = p.songs.map((e) => e.songId).filter((s) => L.songs.has(s));
     const covers = store.playlistCovers(p);
     return trackPage({
-      key: `playlist:${id}`, c: { type: 'playlist', id }, ids, playlistId: id, dates: new Map(p.songs.map((e) => [e.songId, e.addedAt])),
+      key: `playlist:${id}`, c: { type: 'playlist', id }, ids, playlistId: id, reorder: (moved, to) => store.reorderPlaylist(id, moved, to), dates: new Map(p.songs.map((e) => [e.songId, e.addedAt])),
       head: pageHead({ kind: 'Playlist', title: p.name, desc: p.description, meta: `${songCount(ids.length)}${ids.length ? `, ${fmtLong(totalTime(ids))}` : ''}`, cover: coverHtml(covers, { icon: 'list-music' }), color: colorOf(covers[0]), editAct: 'edit-playlist' }),
       sorts: ['custom', 'title', 'artist', 'album', 'added', 'duration'], defaultSort: 'custom', deps: ['songs', 'playlists'],
       empty: `<p>This playlist is empty.</p><p class="hint">Add songs from any song's ${ic('ellipsis')} menu, by selecting several songs, or by dragging songs onto the playlist in the sidebar.</p>`,
@@ -329,7 +332,7 @@ async function storageInfo(el) {
 
 // ---------- export / import ----------
 Object.assign(acts, {
-  'reorder-start': (id) => { viewState.set(`playlist:${id}`, { sort: 'custom', dir: 1, filter: '', editing: true }); acts.rerender(); },
+  'reorder-start': (key) => { viewState.set(key, { sort: 'custom', dir: 1, filter: '', editing: true }); acts.rerender(); },
   'reorder-done': (el) => { const st = viewState.get(el.dataset.key); if (st) st.editing = false; acts.rerender(); },
   'edit-playlist': () => { const id = location.hash.split('/')[2]; if (L.playlists.has(id)) editPlaylist(id); },
   'export-library': async () => {

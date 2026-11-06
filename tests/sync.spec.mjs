@@ -97,6 +97,12 @@ test('two devices stay in sync through Google Drive', async ({ browser }) => {
     expect(a3.songs.find((s) => s.title === 'Morning Light').artist).toBe('The Testers (Live)');
     expect(a3.likes).toHaveLength(2);
 
+    // A custom order of Liked Songs syncs too.
+    await pc.page.evaluate(async () => { const { store } = window.__lark; const ids = store.likedSongIds(); await store.reorderList('liked', [ids[ids.length - 1]], 0); });
+    await syncNow(pc.page);
+    await syncNow(phone.page);
+    expect(await phone.page.evaluate(() => window.__lark.store.likedSongIds())).toEqual(await pc.page.evaluate(() => window.__lark.store.likedSongIds()));
+
     // When the one-hour Google sign-in has run out, Lark asks for one tap, then carries on.
     await pc.page.evaluate(async () => { const db = await new Promise((r) => { const q = indexedDB.open('lark'); q.onsuccess = () => r(q.result); }); await new Promise((r) => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put({ key: 'syncToken', value: { token: 'fake-old', expiresAt: Date.now() - 1000 } }); t.oncomplete = r; }); });
     await pc.page.reload();

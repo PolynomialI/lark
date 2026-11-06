@@ -170,7 +170,7 @@ export class TrackList {
     document.body.append(ghost);
     document.body.classList.add('dragging');
     const sc = scroller();
-    let target = null, v = 0;
+    let target = null, v = 0, overSelf = false;
     const tick = setInterval(() => { if (v) { sc.scrollTop += v; this.paint(); this.body.append(line); } }, 16);
     const clearHi = () => document.querySelectorAll('.drop').forEach((x) => x.classList.remove('drop'));
     const move = (ev) => {
@@ -180,6 +180,7 @@ export class TrackList {
       line.hidden = true;
       target = null;
       const pl = el?.closest('[data-drop-playlist]'), lk = el?.closest('[data-drop-liked]');
+      overSelf = el?.closest('.tl-body') === this.body;
       if (pl) { target = { pl: pl.dataset.dropPlaylist }; pl.classList.add('drop'); }
       else if (lk) { target = { liked: true }; lk.classList.add('drop'); }
       else if (this.o.reorderable && el?.closest('.tl-body') === this.body) {
@@ -211,7 +212,7 @@ export class TrackList {
       } else if (target && 'idx' in target) {
         const before = this.ids.slice(0, target.idx).filter((id) => ids.includes(id)).length;
         this.o.onReorder?.(ids, target.idx - before);
-      }
+      } else if (overSelf && !this.o.reorderable && this.o.reorderHint) toast(this.o.reorderHint);
     };
     move(e);
     addEventListener('pointermove', move);

@@ -63,3 +63,21 @@ test('phone layout: tabs, mini-player swipes, full player, sheets', async ({ pag
   await expect(page.locator('.sheet-queue')).toHaveCount(0);
   await expect(page.locator('.np.open')).toBeVisible();
 });
+
+test('phone: reorder Liked Songs with the drag handles (⋯ → Reorder songs)', async ({ page }) => {
+  await openApp(page);
+  await importDir(page, tones(6, 4));
+  await page.evaluate(async () => { const { store } = window.__lark; for (const id of store.allSongIds().slice(0, 3).reverse()) await store.setLiked([id], true); });
+  await page.goto('/#/liked');
+  const before = await page.locator('.tl-body .t').allTextContents();
+  await page.locator('.ab [data-act="ctx-menu"]').tap();
+  await page.locator('.menu.sheet .menu-item', { hasText: 'Reorder songs' }).tap();
+  await expect(page.locator('.editing-bar')).toBeVisible();
+  const grip = page.locator('.tl-body .tr').nth(2).locator('[data-grip]');
+  await expect(grip).toBeVisible();
+  const g = await grip.boundingBox(), top = await page.locator('.tl-body .tr').first().boundingBox();
+  await swipe(page, g.x + g.width / 2, g.y + g.height / 2, g.x + g.width / 2, top.y + 6);
+  await expect(page.locator('.tl-body .t')).toHaveText([before[2], before[0], before[1]]);
+  await page.locator('.editing-bar').getByRole('button', { name: 'Done' }).tap();
+  await expect(page.locator('.editing-bar')).toHaveCount(0);
+});
