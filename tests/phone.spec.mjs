@@ -69,6 +69,7 @@ test('phone: reorder Liked Songs with the drag handles (⋯ → Reorder songs)',
   await importDir(page, tones(6, 4));
   await page.evaluate(async () => { const { store } = window.__lark; for (const id of store.allSongIds().slice(0, 3).reverse()) await store.setLiked([id], true); });
   await page.goto('/#/liked');
+  await expect(page.locator('.tl-body .tr')).toHaveCount(3);
   const before = await page.locator('.tl-body .t').allTextContents();
   await page.locator('.ab [data-act="ctx-menu"]').tap();
   await page.locator('.menu.sheet .menu-item', { hasText: 'Reorder songs' }).tap();
