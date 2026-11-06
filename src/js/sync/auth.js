@@ -28,7 +28,8 @@ export async function requestToken(email) {
       },
       error_callback: (e) => reject(new Error(e?.type === 'popup_closed' ? 'Google sign-in was closed.' : e?.type === 'popup_failed_to_open' ? 'Your browser blocked the Google sign-in window.' : e?.message || 'Google sign-in failed.')),
     });
-    client.requestAccessToken({ prompt: email ? '' : 'consent' });
+    // First connect: always let the person pick the account. Later sign-ins: the same account, no questions.
+    client.requestAccessToken({ prompt: email ? '' : 'select_account consent' });
   });
 }
 export function revoke(token) { try { window.google?.accounts.oauth2.revoke(token, () => {}); } catch {} }
